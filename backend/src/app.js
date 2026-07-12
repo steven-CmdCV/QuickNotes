@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const categoryRoutes = require('./routes/categoryRoutes');
 
 const app = express();
 
@@ -12,5 +13,7 @@ app.get('/api/health', (req, res) => {
     message: 'El backend de Quick Notes esta funcionando'
   });
 });
+
+app.use('/api/categories', categoryRoutes);
 
 module.exports = app;

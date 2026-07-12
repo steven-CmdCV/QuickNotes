@@ -139,9 +139,22 @@ function updateNote({ noteId, userId, categoryId, title, content, isFavorite }) 
   return updateNoteTransaction();
 }
 
+function deleteNoteByIdAndUserId(noteId, userId) {
+  const query = `
+    DELETE FROM notas
+    WHERE id_nota = ?
+      AND id_usuario = ?
+  `;
+
+  const result = db.prepare(query).run(noteId, userId);
+
+  return result.changes === 1;
+}
+
 module.exports = {
   getNotesByUserId,
   getNoteByIdAndUserId,
   createNote,
-  updateNote
+  updateNote,
+  deleteNoteByIdAndUserId
 };

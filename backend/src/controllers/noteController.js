@@ -271,9 +271,50 @@ function updateNote(req, res) {
   }
 }
 
+function deleteNote(req, res) {
+  const noteId = parseNoteId(req.params.id);
+
+  if (noteId === null) {
+    return res.status(400).json({
+      success: false,
+      message: 'El identificador de la nota no es válido.'
+    });
+  }
+
+  try {
+    const wasDeleted = noteModel.deleteNoteByIdAndUserId(
+      noteId,
+      DEMO_USER_ID
+    );
+
+    if (!wasDeleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nota no encontrada.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Nota eliminada correctamente.',
+      data: {
+        id_nota: noteId
+      }
+    });
+  } catch (error) {
+    console.error('Error al eliminar la nota:', error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: 'No se pudo eliminar la nota.'
+    });
+  }
+}
+
 module.exports = {
   getNotes,
   getNoteById,
   createNote,
-  updateNote
+  updateNote,
+  deleteNote
 };

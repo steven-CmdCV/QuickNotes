@@ -1,0 +1,32 @@
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem;
+}
+
+.intro {
+  width: min(100%, 42rem);
+}
+
+.status {
+  margin: 0 0 1rem;
+  color: #18794e;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0;
+  color: #17211b;
+  font-size: clamp(2.75rem, 8vw, 5.5rem);
+  line-height: 1;
+}
+
+.description {
+  max-width: 34rem;
+  margin: 1.5rem 0 0;
+  color: #4d5951;
+  font-size: 1.125rem;
+  line-height: 1.7;
+}

@@ -8,31 +8,6 @@ Quick Notes es una aplicacion web academica sencilla para gestionar notas rapida
 - Backend: Node.js + Express
 - Base de datos: SQLite
 
-## Estructura del proyecto
-
-```text
-backend/
-  src/
-    config/
-    controllers/
-    models/
-    routes/
-    middlewares/
-    app.js
-    server.js
-  database/
-    schema.sql
-    seed.sql
-    init_db.js
-    data/
-frontend/
-  src/
-    components/
-    pages/
-    services/
-    App.jsx
-    main.jsx
-```
 
 ## Backend
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import NotesList from './components/NotesList.jsx';
 import { getHealth } from './services/api.js';
 import './App.css';
 
@@ -52,6 +53,7 @@ function App() {
           Organiza tus notas de manera rápida y sencilla.
         </p>
       </section>
+      <NotesList />
     </main>
   );
 }

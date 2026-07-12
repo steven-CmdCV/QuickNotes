@@ -1,12 +1,11 @@
 .app-shell {
-  display: grid;
   min-height: 100vh;
-  place-items: center;
-  padding: 2rem;
+  padding: 4rem 2rem;
 }
 
 .intro {
-  width: min(100%, 42rem);
+  width: min(100%, 70rem);
+  margin: 0 auto;
 }
 
 .status {
@@ -40,4 +39,96 @@ h1 {
   color: #4d5951;
   font-size: 1.125rem;
   line-height: 1.7;
+}
+
+.notes-section {
+  width: min(100%, 70rem);
+  margin: 4rem auto 0;
+}
+
+.notes-section h2 {
+  margin: 0 0 1.5rem;
+  color: #17211b;
+  font-size: 1.5rem;
+}
+
+.notes-message {
+  margin: 0;
+  color: #4d5951;
+  line-height: 1.6;
+}
+
+.notes-message--error {
+  color: #b42318;
+}
+
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.note-card {
+  height: 100%;
+  padding: 1.25rem;
+  overflow-wrap: anywhere;
+  background: #ffffff;
+  border: 1px solid #dce2dd;
+  border-radius: 8px;
+}
+
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.note-category,
+.note-favorite,
+.note-date {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.note-category {
+  color: #59645c;
+  font-weight: 700;
+}
+
+.note-favorite {
+  color: #8a5a00;
+  font-weight: 700;
+}
+
+.note-card h3 {
+  margin: 0;
+  color: #17211b;
+  font-size: 1.125rem;
+}
+
+.note-content {
+  margin: 0.75rem 0 1.25rem;
+  color: #4d5951;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.note-date {
+  color: #69736c;
+}
+
+@media (max-width: 40rem) {
+  .app-shell {
+    padding: 2.5rem 1.25rem;
+  }
+
+  .notes-section {
+    margin-top: 3rem;
+  }
 }

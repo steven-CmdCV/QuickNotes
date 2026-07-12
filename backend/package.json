@@ -1,0 +1,28 @@
+{
+  "name": "quick-notes-backend",
+  "version": "1.0.0",
+  "description": "Backend academico para Quick Notes",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "dev:watch": "nodemon src/server.js",
+    "init-db": "node database/init_db.js"
+  },
+  "keywords": [
+    "express",
+    "sqlite",
+    "notes"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

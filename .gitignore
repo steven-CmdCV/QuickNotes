@@ -1,0 +1,17 @@
+node_modules/
+.npm-cache/
+.node-gyp/
+
+.env
+.DS_Store
+
+backend/database/data/*.db*
+backend/database/data/*.sqlite
+backend/database/data/*.sqlite3
+
+backend/database/data/*
+!backend/database/data/.gitkeep
+
+dist/
+build/
+coverage/

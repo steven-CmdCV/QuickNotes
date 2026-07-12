@@ -116,7 +116,8 @@ h1 {
 .form-field input:focus,
 .form-field textarea:focus,
 .form-field select:focus,
-.submit-button:focus-visible {
+.submit-button:focus-visible,
+.delete-button:focus-visible {
   outline: 3px solid #9dd8ba;
   outline-offset: 2px;
 }
@@ -169,6 +170,19 @@ h1 {
 }
 
 .notes-message--error {
+  color: #b42318;
+}
+
+.deletion-message {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.deletion-message--success {
+  color: #18794e;
+}
+
+.deletion-message--error {
   color: #b42318;
 }
 
@@ -231,6 +245,37 @@ h1 {
 
 .note-date {
   color: #69736c;
+}
+
+.note-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.delete-button {
+  min-width: 6.75rem;
+  padding: 0.5rem 0.75rem;
+  color: #b42318;
+  font-weight: 700;
+  background: #ffffff;
+  border: 1px solid #d92d20;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.delete-button:hover:not(:disabled) {
+  color: #ffffff;
+  background: #b42318;
+}
+
+.delete-button:disabled {
+  color: #69736c;
+  background: #edf0ed;
+  border-color: #aab3ac;
+  cursor: not-allowed;
 }
 
 @media (max-width: 40rem) {

@@ -79,6 +79,32 @@ async function createNote(noteData, { signal } = {}) {
   return data.data;
 }
 
-export { createNote, getCategories, getHealth, getNotes };
+async function deleteNote(noteId, { signal } = {}) {
+  if (!Number.isSafeInteger(noteId) || noteId <= 0) {
+    throw new Error('El identificador de la nota no es válido.');
+  }
+
+  const data = await requestJson(`/api/notes/${noteId}`, {
+    method: 'DELETE',
+    signal,
+  });
+
+  if (
+    !data
+    || data.success !== true
+    || typeof data.data !== 'object'
+    || data.data === null
+    || Array.isArray(data.data)
+    || !Number.isSafeInteger(data.data.id_nota)
+    || data.data.id_nota <= 0
+    || data.data.id_nota !== noteId
+  ) {
+    throw new Error('La respuesta de eliminación no es válida.');
+  }
+
+  return data.data.id_nota;
+}
+
+export { createNote, deleteNote, getCategories, getHealth, getNotes };
 
 export default API_URL;

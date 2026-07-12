@@ -11,9 +11,20 @@
 
 .status {
   margin: 0 0 1rem;
-  color: #18794e;
   font-size: 0.875rem;
   font-weight: 700;
+}
+
+.status--loading {
+  color: #4d5951;
+}
+
+.status--success {
+  color: #18794e;
+}
+
+.status--error {
+  color: #b42318;
 }
 
 h1 {

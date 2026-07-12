@@ -5,7 +5,7 @@ function toDateTime(value) {
   return typeof value === 'string' ? value.replace(' ', 'T') : undefined;
 }
 
-function NotesList() {
+function NotesList({ refreshKey }) {
   const [requestState, setRequestState] = useState({
     status: 'loading',
     notes: [],
@@ -35,7 +35,7 @@ function NotesList() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [refreshKey]);
 
   let content;
 

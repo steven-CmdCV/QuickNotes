@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import CreateNoteForm from './components/CreateNoteForm.jsx';
 import NotesList from './components/NotesList.jsx';
 import { getHealth } from './services/api.js';
 import './App.css';
@@ -11,6 +12,7 @@ const connectionMessages = {
 
 function App() {
   const [connectionStatus, setConnectionStatus] = useState('loading');
+  const [notesRefreshKey, setNotesRefreshKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -38,6 +40,10 @@ function App() {
     };
   }, []);
 
+  function handleNoteCreated() {
+    setNotesRefreshKey((currentKey) => currentKey + 1);
+  }
+
   return (
     <main className="app-shell">
       <section className="intro" aria-labelledby="app-title">
@@ -53,7 +59,8 @@ function App() {
           Organiza tus notas de manera rápida y sencilla.
         </p>
       </section>
-      <NotesList />
+      <CreateNoteForm onNoteCreated={handleNoteCreated} />
+      <NotesList refreshKey={notesRefreshKey} />
     </main>
   );
 }

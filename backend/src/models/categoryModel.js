@@ -14,6 +14,17 @@ function getAllCategories() {
   return db.prepare(query).all();
 }
 
+function categoryExistsById(categoryId) {
+  const query = `
+    SELECT 1
+    FROM categorias
+    WHERE id_categoria = ?
+  `;
+
+  return Boolean(db.prepare(query).get(categoryId));
+}
+
 module.exports = {
-  getAllCategories
+  getAllCategories,
+  categoryExistsById
 };

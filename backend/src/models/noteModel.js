@@ -59,7 +59,43 @@ function getNoteByIdAndUserId(noteId, userId) {
   };
 }
 
+function createNote({ userId, categoryId, title, content, isFavorite }) {
+  const createNoteTransaction = db.transaction(() => {
+    const query = `
+      INSERT INTO notas (
+        id_usuario,
+        id_categoria,
+        titulo,
+        contenido,
+        es_favorita
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `;
+
+    const result = db.prepare(query).run(
+      userId,
+      categoryId,
+      title,
+      content,
+      isFavorite ? 1 : 0
+    );
+    const createdNote = getNoteByIdAndUserId(
+      Number(result.lastInsertRowid),
+      userId
+    );
+
+    if (!createdNote) {
+      throw new Error('No se pudo recuperar la nota creada.');
+    }
+
+    return createdNote;
+  });
+
+  return createNoteTransaction();
+}
+
 module.exports = {
   getNotesByUserId,
-  getNoteByIdAndUserId
+  getNoteByIdAndUserId,
+  createNote
 };

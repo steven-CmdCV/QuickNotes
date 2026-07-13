@@ -117,6 +117,8 @@ h1 {
 .form-field textarea:focus,
 .form-field select:focus,
 .submit-button:focus-visible,
+.cancel-button:focus-visible,
+.edit-button:focus-visible,
 .delete-button:focus-visible {
   outline: 3px solid #9dd8ba;
   outline-offset: 2px;
@@ -183,6 +185,19 @@ h1 {
 }
 
 .deletion-message--error {
+  color: #b42318;
+}
+
+.edit-message {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.edit-message--success {
+  color: #18794e;
+}
+
+.edit-message--error {
   color: #b42318;
 }
 
@@ -253,6 +268,47 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.note-actions,
+.edit-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.edit-button,
+.cancel-button {
+  min-width: 6.75rem;
+  padding: 0.5rem 0.75rem;
+  color: #26322a;
+  font-weight: 700;
+  background: #ffffff;
+  border: 1px solid #7d8980;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.edit-button:hover:not(:disabled),
+.cancel-button:hover:not(:disabled) {
+  background: #edf0ed;
+}
+
+.edit-button:disabled,
+.cancel-button:disabled {
+  color: #69736c;
+  background: #edf0ed;
+  border-color: #aab3ac;
+  cursor: not-allowed;
+}
+
+.edit-note-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.edit-note-form textarea {
+  min-height: 7rem;
 }
 
 .delete-button {

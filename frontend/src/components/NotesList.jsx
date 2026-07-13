@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { deleteNote, getNotes } from '../services/api.js';
+import EditNoteForm from './EditNoteForm.jsx';
 
 function toDateTime(value) {
   return typeof value === 'string' ? value.replace(' ', 'T') : undefined;
@@ -12,8 +13,13 @@ function NotesList({ refreshKey }) {
   });
   const [deletingNoteId, setDeletingNoteId] = useState(null);
   const [deletionMessage, setDeletionMessage] = useState(null);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editMessage, setEditMessage] = useState(null);
+  const [notesReloadKey, setNotesReloadKey] = useState(0);
   const deletionInProgressRef = useRef(false);
   const deleteControllerRef = useRef(null);
+  const editingNoteIdRef = useRef(null);
+  const editButtonRefs = useRef(new Map());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -24,13 +30,30 @@ function NotesList({ refreshKey }) {
 
         if (!controller.signal.aborted) {
           setRequestState({ status: 'success', notes });
+
+          if (
+            editingNoteIdRef.current !== null
+            && !notes.some(
+              (note) => note.id_nota === editingNoteIdRef.current,
+            )
+          ) {
+            editingNoteIdRef.current = null;
+            setEditingNoteId(null);
+            setEditMessage({
+              type: 'error',
+              text: 'No se pudo actualizar la nota.',
+            });
+          }
         }
       } catch (error) {
         if (error.name === 'AbortError' || controller.signal.aborted) {
           return;
         }
 
-        setRequestState({ status: 'error', notes: [] });
+        setRequestState((currentState) => ({
+          status: 'error',
+          notes: currentState.notes,
+        }));
       }
     }
 
@@ -39,14 +62,17 @@ function NotesList({ refreshKey }) {
     return () => {
       controller.abort();
     };
-  }, [refreshKey]);
+  }, [refreshKey, notesReloadKey]);
 
   useEffect(() => () => {
     deleteControllerRef.current?.abort();
   }, []);
 
   async function handleDelete(note) {
-    if (deletionInProgressRef.current) {
+    if (
+      deletionInProgressRef.current
+      || editingNoteIdRef.current !== null
+    ) {
       return;
     }
 
@@ -104,15 +130,54 @@ function NotesList({ refreshKey }) {
     }
   }
 
+  function focusEditButton(noteId) {
+    window.setTimeout(() => {
+      editButtonRefs.current.get(noteId)?.focus();
+    }, 0);
+  }
+
+  function handleEdit(noteId) {
+    if (
+      deletionInProgressRef.current
+      || editingNoteIdRef.current !== null
+    ) {
+      return;
+    }
+
+    editingNoteIdRef.current = noteId;
+    setEditingNoteId(noteId);
+    setEditMessage(null);
+  }
+
+  function handleEditCancel(noteId) {
+    editingNoteIdRef.current = null;
+    setEditingNoteId(null);
+    focusEditButton(noteId);
+  }
+
+  function handleNoteUpdated(updatedNote) {
+    editingNoteIdRef.current = null;
+    setEditingNoteId(null);
+    setEditMessage({
+      type: 'success',
+      text: 'Nota actualizada correctamente.',
+    });
+    setNotesReloadKey((currentKey) => currentKey + 1);
+    focusEditButton(updatedNote.id_nota);
+  }
+
   let content;
 
-  if (requestState.status === 'loading') {
+  if (requestState.status === 'loading' && requestState.notes.length === 0) {
     content = (
       <p className="notes-message" role="status">
         Cargando notas...
       </p>
     );
-  } else if (requestState.status === 'error') {
+  } else if (
+    requestState.status === 'error'
+    && requestState.notes.length === 0
+  ) {
     content = (
       <p className="notes-message notes-message--error" role="alert">
         No se pudieron cargar las notas.
@@ -126,35 +191,66 @@ function NotesList({ refreshKey }) {
         {requestState.notes.map((note) => (
           <li key={note.id_nota}>
             <article className="note-card">
-              <div className="note-meta">
-                <p className="note-category">
-                  {note.nombre_categoria ?? 'Sin categoría'}
-                </p>
-                {note.es_favorita === true && (
-                  <span className="note-favorite">Favorita</span>
-                )}
-              </div>
-              <h3>{note.titulo}</h3>
-              <p className="note-content">{note.contenido}</p>
-              <div className="note-footer">
-                <p className="note-date">
-                  Actualizada:{' '}
-                  <time dateTime={toDateTime(note.fecha_modificacion)}>
-                    {note.fecha_modificacion}
-                  </time>
-                </p>
-                <button
-                  className="delete-button"
-                  type="button"
-                  disabled={deletingNoteId !== null}
-                  aria-label={`Eliminar nota: ${note.titulo}`}
-                  onClick={() => handleDelete(note)}
-                >
-                  {deletingNoteId === note.id_nota
-                    ? 'Eliminando...'
-                    : 'Eliminar'}
-                </button>
-              </div>
+              {editingNoteId === note.id_nota ? (
+                <EditNoteForm
+                  note={note}
+                  onCancel={() => handleEditCancel(note.id_nota)}
+                  onUpdated={handleNoteUpdated}
+                />
+              ) : (
+                <>
+                  <div className="note-meta">
+                    <p className="note-category">
+                      {note.nombre_categoria ?? 'Sin categoría'}
+                    </p>
+                    {note.es_favorita === true && (
+                      <span className="note-favorite">Favorita</span>
+                    )}
+                  </div>
+                  <h3>{note.titulo}</h3>
+                  <p className="note-content">{note.contenido}</p>
+                  <div className="note-footer">
+                    <p className="note-date">
+                      Actualizada:{' '}
+                      <time dateTime={toDateTime(note.fecha_modificacion)}>
+                        {note.fecha_modificacion}
+                      </time>
+                    </p>
+                    <div className="note-actions">
+                      <button
+                        className="edit-button"
+                        type="button"
+                        disabled={
+                          deletingNoteId !== null || editingNoteId !== null
+                        }
+                        ref={(element) => {
+                          if (element) {
+                            editButtonRefs.current.set(note.id_nota, element);
+                          } else {
+                            editButtonRefs.current.delete(note.id_nota);
+                          }
+                        }}
+                        onClick={() => handleEdit(note.id_nota)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="delete-button"
+                        type="button"
+                        disabled={
+                          deletingNoteId !== null || editingNoteId !== null
+                        }
+                        aria-label={`Eliminar nota: ${note.titulo}`}
+                        onClick={() => handleDelete(note)}
+                      >
+                        {deletingNoteId === note.id_nota
+                          ? 'Eliminando...'
+                          : 'Eliminar'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </article>
           </li>
         ))}
@@ -171,6 +267,19 @@ function NotesList({ refreshKey }) {
           role={deletionMessage.type === 'success' ? 'status' : 'alert'}
         >
           {deletionMessage.text}
+        </p>
+      )}
+      {editMessage && (
+        <p
+          className={`edit-message edit-message--${editMessage.type}`}
+          role={editMessage.type === 'success' ? 'status' : 'alert'}
+        >
+          {editMessage.text}
+        </p>
+      )}
+      {requestState.status === 'error' && requestState.notes.length > 0 && (
+        <p className="notes-message notes-message--error" role="alert">
+          No se pudieron cargar las notas.
         </p>
       )}
       {content}

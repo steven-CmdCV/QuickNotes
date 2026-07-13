@@ -31,6 +31,17 @@ Las claves foraneas de SQLite se activan con:
 PRAGMA foreign_keys = ON;
 ```
 
+## Credenciales academicas
+
+El usuario demo se utiliza exclusivamente para presentar y probar el proyecto:
+
+```text
+Correo: demo@quicknotes.local
+Contraseña: QuickNotesDemo2026!
+```
+
+La base de datos almacena solamente el hash bcrypt de esta contraseña.
+
 ## Ejecutar inicializacion
 
 Desde la raiz del proyecto:

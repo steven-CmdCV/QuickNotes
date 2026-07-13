@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('node:assert/strict');
 const { after, before, describe, test } = require('node:test');
+const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const {
   backendRoot,
@@ -10,12 +11,21 @@ const {
   removeTestDatabase
 } = require('./helpers/testDatabase');
 
+const DEMO_EMAIL = 'demo@quicknotes.local';
+const DEMO_PASSWORD = 'QuickNotesDemo2026!';
+const TEST_JWT_SECRET = 'quick-notes-integration-test-secret';
+
 describe('Quick Notes API', { concurrency: false }, () => {
   const hadOriginalDbPath = Object.prototype.hasOwnProperty.call(
     process.env,
     'DB_PATH'
   );
   const originalDbPath = process.env.DB_PATH;
+  const hadOriginalJwtSecret = Object.prototype.hasOwnProperty.call(
+    process.env,
+    'JWT_SECRET'
+  );
+  const originalJwtSecret = process.env.JWT_SECRET;
   const srcRoot = path.resolve(backendRoot, 'src');
 
   let app;
@@ -39,6 +49,7 @@ describe('Quick Notes API', { concurrency: false }, () => {
     });
 
     process.env.DB_PATH = testDatabase.databasePath;
+    process.env.JWT_SECRET = TEST_JWT_SECRET;
 
     app = require('../src/app');
     db = require('../src/config/db');
@@ -61,6 +72,12 @@ describe('Quick Notes API', { concurrency: false }, () => {
       process.env.DB_PATH = originalDbPath;
     } else {
       delete process.env.DB_PATH;
+    }
+
+    if (hadOriginalJwtSecret) {
+      process.env.JWT_SECRET = originalJwtSecret;
+    } else {
+      delete process.env.JWT_SECRET;
     }
 
     for (const modulePath of Object.keys(require.cache)) {
@@ -101,6 +118,239 @@ describe('Quick Notes API', { concurrency: false }, () => {
       'Recordatorios',
       'Trabajo'
     ]);
+  });
+
+  test('POST /api/auth/login autentica al usuario demo', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({
+        correo: `  ${DEMO_EMAIL.toUpperCase()}  `,
+        password: DEMO_PASSWORD
+      })
+      .expect(200);
+
+    assert.strictEqual(response.body.success, true);
+    assert.strictEqual(typeof response.body.data.token, 'string');
+    assert.strictEqual(response.body.data.token_type, 'Bearer');
+    assert.strictEqual(response.body.data.expires_in, 7200);
+    assert.deepStrictEqual(response.body.data.user, {
+      id_usuario: 1,
+      nombre: 'Usuario Demo',
+      correo: DEMO_EMAIL
+    });
+  });
+
+  test('POST /api/auth/login rechaza una contrasena incorrecta', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({
+        correo: DEMO_EMAIL,
+        password: 'ContrasenaIncorrecta'
+      })
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Credenciales inválidas.'
+    });
+  });
+
+  test('POST /api/auth/login no revela si el correo existe', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({
+        correo: 'no-existe@quicknotes.local',
+        password: DEMO_PASSWORD
+      })
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Credenciales inválidas.'
+    });
+  });
+
+  test('POST /api/auth/login exige ambos campos', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: DEMO_EMAIL })
+      .expect(400);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'El correo y la contraseña son obligatorios.'
+    });
+  });
+
+  test('POST /api/auth/login rechaza tipos incorrectos', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: 1, password: true })
+      .expect(400);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'El correo y la contraseña deben ser cadenas de texto.'
+    });
+  });
+
+  test('POST /api/auth/login rechaza valores vacios', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: '   ', password: '' })
+      .expect(400);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'El correo y la contraseña son obligatorios.'
+    });
+  });
+
+  test('POST /api/auth/login nunca devuelve password_hash', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: DEMO_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+
+    assert.strictEqual(response.text.includes('password_hash'), false);
+  });
+
+  test('GET /api/auth/me devuelve el usuario del token', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: DEMO_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${loginResponse.body.data.token}`)
+      .expect(200);
+
+    assert.deepStrictEqual(response.body, {
+      success: true,
+      data: {
+        user: {
+          id_usuario: 1,
+          nombre: 'Usuario Demo',
+          correo: DEMO_EMAIL
+        }
+      }
+    });
+  });
+
+  test('GET /api/auth/me exige Authorization', async () => {
+    const response = await request(app).get('/api/auth/me').expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('GET /api/auth/me rechaza un esquema distinto de Bearer', async () => {
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Basic credenciales')
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('GET /api/auth/me rechaza un token malformado', async () => {
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer token-malformado')
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('GET /api/auth/me rechaza otra firma', async () => {
+    const token = jwt.sign({}, 'otro-secreto-de-prueba', {
+      algorithm: 'HS256',
+      expiresIn: '2h',
+      subject: '1'
+    });
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('GET /api/auth/me rechaza un token expirado', async () => {
+    const token = jwt.sign({}, TEST_JWT_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: -1,
+      subject: '1'
+    });
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('GET /api/auth/me rechaza un sub invalido', async () => {
+    const token = jwt.sign({}, TEST_JWT_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: '2h',
+      subject: 'abc'
+    });
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('GET /api/auth/me rechaza un usuario que ya no existe', async () => {
+    const token = jwt.sign({}, TEST_JWT_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: '2h',
+      subject: '9999'
+    });
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('GET /api/auth/me nunca devuelve password_hash', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: DEMO_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${loginResponse.body.data.token}`)
+      .expect(200);
+
+    assert.strictEqual(response.text.includes('password_hash'), false);
   });
 
   test('GET /api/notes devuelve las dos notas demo', async () => {

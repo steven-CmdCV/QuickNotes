@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const authRoutes = require('./routes/authRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const notFoundMiddleware = require('./middlewares/notFoundMiddleware');
@@ -20,6 +21,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/notes', noteRoutes);
 

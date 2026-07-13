@@ -10,9 +10,18 @@ INSERT OR IGNORE INTO categorias (nombre_categoria, descripcion) VALUES
   ('Recordatorios', 'Recordatorios importantes');
 
 -- Usuario demo para pruebas academicas.
--- El password_hash es solo de prueba y no debe usarse en produccion.
+-- El hash bcrypt es solo de prueba y no debe usarse en produccion.
 INSERT OR IGNORE INTO usuarios (nombre, correo, password_hash) VALUES
-  ('Usuario Demo', 'demo@quicknotes.local', 'hash_de_prueba_no_seguro');
+  (
+    'Usuario Demo',
+    'demo@quicknotes.local',
+    '$2b$10$z5vfaQZNpbxJ2TVSXLbBUuTRZnRwrFKLgT18V1J7WSdJaq6vazdiy'
+  );
+
+UPDATE usuarios
+SET password_hash = '$2b$10$z5vfaQZNpbxJ2TVSXLbBUuTRZnRwrFKLgT18V1J7WSdJaq6vazdiy'
+WHERE correo = 'demo@quicknotes.local'
+  AND password_hash = 'hash_de_prueba_no_seguro';
 
 INSERT INTO notas (id_usuario, id_categoria, titulo, contenido, es_favorita)
 SELECT

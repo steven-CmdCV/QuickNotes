@@ -271,6 +271,86 @@ h1 {
   color: #b42318;
 }
 
+.notes-filters {
+  display: grid;
+  grid-template-columns: minmax(14rem, 2fr) minmax(12rem, 1fr) auto auto;
+  gap: 1rem;
+  align-items: end;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #dce2dd;
+}
+
+.notes-filter-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.notes-filter-field label,
+.notes-filter-favorite {
+  color: #26322a;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.notes-filter-field input,
+.notes-filter-field select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  color: #17211b;
+  background: #ffffff;
+  border: 1px solid #b9c3bc;
+  border-radius: 6px;
+}
+
+.notes-filter-favorite {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+
+.notes-filter-favorite input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
+.clear-filters-button {
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  color: #26322a;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #ffffff;
+  border: 1px solid #7d8980;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.clear-filters-button:hover:not(:disabled) {
+  background: #edf0ed;
+}
+
+.notes-filter-field input:focus,
+.notes-filter-field select:focus,
+.clear-filters-button:focus-visible {
+  outline: 3px solid #9dd8ba;
+  outline-offset: 2px;
+}
+
+.notes-filter-field input:disabled,
+.notes-filter-field select:disabled,
+.notes-filter-favorite input:disabled,
+.clear-filters-button:disabled {
+  color: #69736c;
+  background: #edf0ed;
+  border-color: #aab3ac;
+  cursor: not-allowed;
+}
+
 .deletion-message {
   margin: 0 0 1rem;
   line-height: 1.5;
@@ -450,5 +530,14 @@ h1 {
 
   .user-bar {
     align-items: flex-start;
+  }
+
+  .notes-filters {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .clear-filters-button {
+    width: fit-content;
   }
 }

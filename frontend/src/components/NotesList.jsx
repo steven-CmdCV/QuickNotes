@@ -1,6 +1,47 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteNote, getNotes } from '../services/api.js';
 import EditNoteForm from './EditNoteForm.jsx';
+import NotesFilters from './NotesFilters.jsx';
+
+const ALL_CATEGORIES = 'all';
+const UNCATEGORIZED = 'uncategorized';
+
+function normalizeSearchValue(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function mergeCategoryOptions(currentOptions, notes) {
+  const categoriesById = new Map(
+    currentOptions.map((category) => [category.id, category.name]),
+  );
+
+  for (const note of notes) {
+    if (
+      Number.isSafeInteger(note.id_categoria)
+      && note.id_categoria > 0
+      && typeof note.nombre_categoria === 'string'
+      && note.nombre_categoria.trim() !== ''
+    ) {
+      categoriesById.set(
+        note.id_categoria,
+        note.nombre_categoria.trim(),
+      );
+    }
+  }
+
+  return Array.from(categoriesById, ([id, name]) => ({ id, name }))
+    .sort((firstCategory, secondCategory) => (
+      firstCategory.name.localeCompare(secondCategory.name)
+    ));
+}
 
 function toDateTime(value) {
   return typeof value === 'string' ? value.replace(' ', 'T') : undefined;
@@ -16,6 +57,10 @@ function NotesList({ refreshKey }) {
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editMessage, setEditMessage] = useState(null);
   const [notesReloadKey, setNotesReloadKey] = useState(0);
+  const [searchText, setSearchText] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const deletionInProgressRef = useRef(false);
   const deleteControllerRef = useRef(null);
   const editingNoteIdRef = useRef(null);
@@ -30,6 +75,9 @@ function NotesList({ refreshKey }) {
 
         if (!controller.signal.aborted) {
           setRequestState({ status: 'success', notes });
+          setCategoryOptions((currentOptions) => (
+            mergeCategoryOptions(currentOptions, notes)
+          ));
 
           if (
             editingNoteIdRef.current !== null
@@ -166,6 +214,40 @@ function NotesList({ refreshKey }) {
     focusEditButton(updatedNote.id_nota);
   }
 
+  function handleClearFilters() {
+    setSearchText('');
+    setSelectedCategory(ALL_CATEGORIES);
+    setOnlyFavorites(false);
+  }
+
+  const normalizedSearch = normalizeSearchValue(searchText);
+  const hasActiveFilters = normalizedSearch !== ''
+    || selectedCategory !== ALL_CATEGORIES
+    || onlyFavorites;
+  const filtersDisabled = editingNoteId !== null || deletingNoteId !== null;
+  const filteredNotes = useMemo(() => requestState.notes.filter((note) => {
+    const matchesSearch = normalizedSearch === ''
+      || normalizeSearchValue(note.titulo).includes(normalizedSearch)
+      || normalizeSearchValue(note.contenido).includes(normalizedSearch);
+
+    let matchesCategory = true;
+
+    if (selectedCategory === UNCATEGORIZED) {
+      matchesCategory = note.id_categoria === null;
+    } else if (selectedCategory !== ALL_CATEGORIES) {
+      matchesCategory = selectedCategory === `category:${note.id_categoria}`;
+    }
+
+    const matchesFavorite = !onlyFavorites || note.es_favorita === true;
+
+    return matchesSearch && matchesCategory && matchesFavorite;
+  }), [
+    normalizedSearch,
+    onlyFavorites,
+    requestState.notes,
+    selectedCategory,
+  ]);
+
   let content;
 
   if (requestState.status === 'loading' && requestState.notes.length === 0) {
@@ -185,10 +267,16 @@ function NotesList({ refreshKey }) {
     );
   } else if (requestState.notes.length === 0) {
     content = <p className="notes-message">No hay notas disponibles.</p>;
+  } else if (filteredNotes.length === 0) {
+    content = (
+      <p className="notes-message">
+        No hay notas que coincidan con los filtros.
+      </p>
+    );
   } else {
     content = (
       <ul className="notes-grid">
-        {requestState.notes.map((note) => (
+        {filteredNotes.map((note) => (
           <li key={note.id_nota}>
             <article className="note-card">
               {editingNoteId === note.id_nota ? (
@@ -261,6 +349,20 @@ function NotesList({ refreshKey }) {
   return (
     <section className="notes-section" aria-labelledby="notes-title">
       <h2 id="notes-title">Tus notas</h2>
+      {requestState.notes.length > 0 && (
+        <NotesFilters
+          categoryOptions={categoryOptions}
+          disabled={filtersDisabled}
+          hasActiveFilters={hasActiveFilters}
+          onlyFavorites={onlyFavorites}
+          searchText={searchText}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          onClear={handleClearFilters}
+          onOnlyFavoritesChange={setOnlyFavorites}
+          onSearchChange={setSearchText}
+        />
+      )}
       {deletionMessage && (
         <p
           className={`deletion-message deletion-message--${deletionMessage.type}`}

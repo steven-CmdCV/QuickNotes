@@ -329,37 +329,41 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      {authState.status === 'authenticated' && (
-        <header className="user-bar" aria-label="Sesión actual">
-          <div>
-            <p className="user-name">{authState.user.nombre}</p>
-            <p className="user-email">{authState.user.correo}</p>
-          </div>
-          <button
-            className="logout-button"
-            type="button"
-            onClick={handleLogout}
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="intro">
+          <h1 id="app-title">QuickNotes</h1>
+          <p className="description">
+            Organiza tus notas de manera rápida y sencilla.
+          </p>
+          <p
+            className={`status status--${connectionStatus}`}
+            role="status"
+            aria-live="polite"
           >
-            Cerrar sesión
-          </button>
-        </header>
-      )}
-      <section className="intro" aria-labelledby="app-title">
-        <p
-          className={`status status--${connectionStatus}`}
-          role="status"
-          aria-live="polite"
-        >
-          {connectionMessages[connectionStatus]}
-        </p>
-        <h1 id="app-title">QuickNotes</h1>
-        <p className="description">
-          Organiza tus notas de manera rápida y sencilla.
-        </p>
-      </section>
-      {authContent}
-    </main>
+            {connectionMessages[connectionStatus]}
+          </p>
+        </div>
+        {authState.status === 'authenticated' && (
+          <div className="user-bar" aria-label="Sesión actual">
+            <div className="user-details">
+              <p className="user-name">{authState.user.nombre}</p>
+              <p className="user-email">{authState.user.correo}</p>
+            </div>
+            <button
+              className="logout-button"
+              type="button"
+              onClick={handleLogout}
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        )}
+      </header>
+      <main className="app-content" aria-labelledby="app-title">
+        {authContent}
+      </main>
+    </div>
   );
 }
 

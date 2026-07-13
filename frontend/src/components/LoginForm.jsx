@@ -92,6 +92,9 @@ function LoginForm({ notice, onAuthenticated, onLoginAttempt }) {
   return (
     <section className="login-section" aria-labelledby="login-title">
       <h2 id="login-title">Iniciar sesión</h2>
+      <p className="required-note">
+        Los campos marcados con * son obligatorios.
+      </p>
       {notice && (
         <p className="auth-message auth-message--notice" role="status">
           {notice}
@@ -99,7 +102,9 @@ function LoginForm({ notice, onAuthenticated, onLoginAttempt }) {
       )}
       <form className="login-form" onSubmit={handleSubmit} noValidate>
         <div className="form-field">
-          <label htmlFor="login-email">Correo</label>
+          <label htmlFor="login-email">
+            Correo <span className="required-mark" aria-hidden="true">*</span>
+          </label>
           <input
             id="login-email"
             name="correo"
@@ -116,7 +121,10 @@ function LoginForm({ notice, onAuthenticated, onLoginAttempt }) {
         </div>
 
         <div className="form-field">
-          <label htmlFor="login-password">Contraseña</label>
+          <label htmlFor="login-password">
+            Contraseña{' '}
+            <span className="required-mark" aria-hidden="true">*</span>
+          </label>
           <input
             id="login-password"
             name="password"

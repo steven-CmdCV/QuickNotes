@@ -2,7 +2,27 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   color: #17211b;
-  background: #f6f8f6;
+  background: #f4f6f4;
+  --color-background: #f4f6f4;
+  --color-surface: #ffffff;
+  --color-text: #17211b;
+  --color-text-strong: #26322a;
+  --color-text-muted: #59645c;
+  --color-border: #dce2dd;
+  --color-control-border: #aeb9b1;
+  --color-primary: #18794e;
+  --color-primary-hover: #11633f;
+  --color-success-soft: #eaf6ef;
+  --color-warning: #7a5100;
+  --color-warning-soft: #fff7df;
+  --color-error: #b42318;
+  --color-error-soft: #fff0ee;
+  --color-focus: #72c69a;
+  --color-disabled: #edf0ed;
+  --color-disabled-text: #69736c;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --shadow-card: 0 1px 3px rgb(23 33 27 / 8%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -13,17 +33,21 @@
 
 html {
   min-width: 320px;
-  background: #f6f8f6;
+  background: var(--color-background);
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  color: var(--color-text);
+  background: var(--color-background);
 }
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+  letter-spacing: 0;
 }

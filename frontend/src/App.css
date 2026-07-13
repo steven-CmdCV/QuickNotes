@@ -129,6 +129,15 @@ h1 {
   color: #b42318;
 }
 
+.auth-message--notice {
+  max-width: 28rem;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 1.25rem;
+  color: #26322a;
+  background: #edf0ed;
+  border-left: 4px solid #18794e;
+}
+
 .auth-message--standalone {
   width: min(100%, 70rem);
   margin: 4rem auto -2.5rem;

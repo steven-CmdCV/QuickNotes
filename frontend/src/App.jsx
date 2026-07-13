@@ -4,20 +4,37 @@ import LoginForm from './components/LoginForm.jsx';
 import NotesList from './components/NotesList.jsx';
 import {
   clearAuthToken,
+  clearUnauthorizedHandler,
   getCurrentUser,
   getHealth,
   isUnauthorizedError,
   setAuthToken,
+  setUnauthorizedHandler,
 } from './services/api.js';
 import './App.css';
 
 const AUTH_TOKEN_KEY = 'quicknotes.authToken';
+const EXPIRED_SESSION_NOTICE = 'Tu sesión expiró. Inicia sesión nuevamente.';
 
 const connectionMessages = {
   loading: 'Comprobando conexión con el servidor...',
   success: 'Backend conectado correctamente.',
   error: 'No se pudo conectar con el backend.',
 };
+
+function removeStoredToken() {
+  try {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    return true;
+  } catch {
+    try {
+      sessionStorage.setItem(AUTH_TOKEN_KEY, '');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
 
 function App() {
   const [connectionStatus, setConnectionStatus] = useState('loading');
@@ -28,11 +45,39 @@ function App() {
     message: null,
   });
   const [verificationKey, setVerificationKey] = useState(0);
+  const [authNotice, setAuthNotice] = useState(null);
   const verificationControllerRef = useRef(null);
   const storedTokenRef = useRef({
     initialized: false,
     value: null,
   });
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      verificationControllerRef.current?.abort();
+      removeStoredToken();
+      clearAuthToken();
+      storedTokenRef.current = { initialized: true, value: null };
+      setAuthNotice(EXPIRED_SESSION_NOTICE);
+      setAuthState((currentState) => {
+        if (
+          currentState.status === 'anonymous'
+          && currentState.user === null
+          && currentState.message === null
+        ) {
+          return currentState;
+        }
+
+        return { status: 'anonymous', user: null, message: null };
+      });
+    }
+
+    setUnauthorizedHandler(handleUnauthorized);
+
+    return () => {
+      clearUnauthorizedHandler(handleUnauthorized);
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -63,20 +108,6 @@ function App() {
   useEffect(() => {
     const controller = new AbortController();
     verificationControllerRef.current = controller;
-
-    function removeStoredToken() {
-      try {
-        sessionStorage.removeItem(AUTH_TOKEN_KEY);
-        return true;
-      } catch {
-        try {
-          sessionStorage.setItem(AUTH_TOKEN_KEY, '');
-          return true;
-        } catch {
-          return false;
-        }
-      }
-    }
 
     async function verifySession() {
       let storedToken = storedTokenRef.current.value;
@@ -126,6 +157,7 @@ function App() {
         const user = await getCurrentUser({ signal: controller.signal });
 
         if (!controller.signal.aborted) {
+          setAuthNotice(null);
           setAuthState({
             status: 'authenticated',
             user,
@@ -141,6 +173,7 @@ function App() {
           clearAuthToken();
           storedTokenRef.current = { initialized: true, value: null };
           const storageWasCleared = removeStoredToken();
+          setAuthNotice(null);
           setAuthState({
             status: 'anonymous',
             user: null,
@@ -197,6 +230,7 @@ function App() {
       initialized: true,
       value: session.token,
     };
+    setAuthNotice(null);
     setAuthState({
       status: 'authenticated',
       user: session.user,
@@ -206,6 +240,7 @@ function App() {
   }
 
   function handleRetryVerification() {
+    setAuthNotice(null);
     setAuthState({ status: 'checking', user: null, message: null });
     setVerificationKey((currentKey) => currentKey + 1);
   }
@@ -227,6 +262,7 @@ function App() {
     }
 
     storedTokenRef.current = { initialized: true, value: null };
+    setAuthNotice(null);
     setAuthState({
       status: 'anonymous',
       user: null,
@@ -276,7 +312,11 @@ function App() {
             {authState.message}
           </p>
         )}
-        <LoginForm onAuthenticated={handleAuthenticated} />
+        <LoginForm
+          notice={authNotice}
+          onAuthenticated={handleAuthenticated}
+          onLoginAttempt={() => setAuthNotice(null)}
+        />
       </>
     );
   } else {

@@ -1,6 +1,9 @@
 const API_URL = import.meta.env.VITE_API_URL;
 const normalizedApiUrl = API_URL?.replace(/\/+$/, '');
 let authToken = null;
+let authGeneration = 0;
+let invalidatedGeneration = null;
+let unauthorizedHandler = null;
 
 class ApiError extends Error {
   constructor(status) {
@@ -24,7 +27,13 @@ function isValidPublicUser(user) {
 
 async function requestJson(
   path,
-  { body, method = 'GET', signal, skipAuth = false } = {},
+  {
+    body,
+    method = 'GET',
+    notifyUnauthorized = true,
+    signal,
+    skipAuth = false,
+  } = {},
 ) {
   if (!normalizedApiUrl) {
     throw new Error('La URL de la API no esta configurada.');
@@ -38,9 +47,11 @@ async function requestJson(
     headers,
     signal,
   };
+  const requestToken = skipAuth ? null : authToken;
+  const requestGeneration = authGeneration;
 
-  if (!skipAuth && authToken) {
-    headers.Authorization = `Bearer ${authToken}`;
+  if (requestToken) {
+    headers.Authorization = `Bearer ${requestToken}`;
   }
 
   if (body !== undefined) {
@@ -51,6 +62,19 @@ async function requestJson(
   const response = await fetch(`${normalizedApiUrl}${path}`, options);
 
   if (!response.ok) {
+    if (
+      response.status === 401
+      && notifyUnauthorized
+      && requestToken
+      && requestToken === authToken
+      && requestGeneration === authGeneration
+      && invalidatedGeneration !== requestGeneration
+      && typeof unauthorizedHandler === 'function'
+    ) {
+      invalidatedGeneration = requestGeneration;
+      unauthorizedHandler();
+    }
+
     throw new ApiError(response.status);
   }
 
@@ -63,10 +87,28 @@ function setAuthToken(token) {
   }
 
   authToken = token.trim();
+  authGeneration += 1;
+  invalidatedGeneration = null;
 }
 
 function clearAuthToken() {
   authToken = null;
+  authGeneration += 1;
+  invalidatedGeneration = null;
+}
+
+function setUnauthorizedHandler(handler) {
+  if (typeof handler !== 'function') {
+    throw new Error('El manejador de sesión no es válido.');
+  }
+
+  unauthorizedHandler = handler;
+}
+
+function clearUnauthorizedHandler(handler) {
+  if (unauthorizedHandler === handler) {
+    unauthorizedHandler = null;
+  }
 }
 
 function isUnauthorizedError(error) {
@@ -98,6 +140,7 @@ async function login(credentials, { signal } = {}) {
     method: 'POST',
     signal,
     skipAuth: true,
+    notifyUnauthorized: false,
   });
 
   if (
@@ -120,7 +163,10 @@ async function login(credentials, { signal } = {}) {
 }
 
 async function getCurrentUser({ signal } = {}) {
-  const data = await requestJson('/api/auth/me', { signal });
+  const data = await requestJson('/api/auth/me', {
+    notifyUnauthorized: false,
+    signal,
+  });
 
   if (
     !data
@@ -137,7 +183,10 @@ async function getCurrentUser({ signal } = {}) {
 }
 
 async function getHealth({ signal } = {}) {
-  const data = await requestJson('/api/health', { signal });
+  const data = await requestJson('/api/health', {
+    notifyUnauthorized: false,
+    signal,
+  });
 
   if (!data || data.status !== 'ok') {
     throw new Error('La respuesta del servidor no es valida.');
@@ -157,7 +206,10 @@ async function getNotes({ signal } = {}) {
 }
 
 async function getCategories({ signal } = {}) {
-  const data = await requestJson('/api/categories', { signal });
+  const data = await requestJson('/api/categories', {
+    notifyUnauthorized: false,
+    signal,
+  });
 
   if (!data || data.success !== true || !Array.isArray(data.data)) {
     throw new Error('La respuesta de categorías no es válida.');
@@ -277,6 +329,7 @@ async function deleteNote(noteId, { signal } = {}) {
 
 export {
   clearAuthToken,
+  clearUnauthorizedHandler,
   createNote,
   deleteNote,
   getCategories,
@@ -286,6 +339,7 @@ export {
   isUnauthorizedError,
   login,
   setAuthToken,
+  setUnauthorizedHandler,
   updateNote,
 };
 

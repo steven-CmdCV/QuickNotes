@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isUnauthorizedError, login } from '../services/api.js';
 
-function LoginForm({ onAuthenticated }) {
+function LoginForm({ notice, onAuthenticated, onLoginAttempt }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submissionState, setSubmissionState] = useState('idle');
@@ -30,6 +30,8 @@ function LoginForm({ onAuthenticated }) {
     if (isSubmittingRef.current) {
       return;
     }
+
+    onLoginAttempt();
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -90,6 +92,11 @@ function LoginForm({ onAuthenticated }) {
   return (
     <section className="login-section" aria-labelledby="login-title">
       <h2 id="login-title">Iniciar sesión</h2>
+      {notice && (
+        <p className="auth-message auth-message--notice" role="status">
+          {notice}
+        </p>
+      )}
       <form className="login-form" onSubmit={handleSubmit} noValidate>
         <div className="form-field">
           <label htmlFor="login-email">Correo</label>

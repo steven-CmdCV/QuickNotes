@@ -8,6 +8,33 @@
   margin: 0 auto;
 }
 
+.user-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(100%, 70rem);
+  padding-bottom: 1.25rem;
+  margin: 0 auto 2rem;
+  border-bottom: 1px solid #dce2dd;
+}
+
+.user-name,
+.user-email {
+  margin: 0;
+}
+
+.user-name {
+  color: #17211b;
+  font-weight: 700;
+}
+
+.user-email {
+  margin-top: 0.25rem;
+  color: #59645c;
+  font-size: 0.875rem;
+}
+
 .status {
   margin: 0 0 1rem;
   font-size: 0.875rem;
@@ -74,6 +101,46 @@ h1 {
   color: #18794e;
 }
 
+.login-section,
+.session-section {
+  width: min(100%, 70rem);
+  margin: 4rem auto 0;
+}
+
+.login-section h2 {
+  margin: 0 0 1.5rem;
+  color: #17211b;
+  font-size: 1.5rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 28rem;
+}
+
+.session-message,
+.auth-message {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.auth-message--error {
+  color: #b42318;
+}
+
+.auth-message--standalone {
+  width: min(100%, 70rem);
+  margin: 4rem auto -2.5rem;
+}
+
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
 .note-form {
   display: grid;
   gap: 1.25rem;
@@ -119,7 +186,9 @@ h1 {
 .submit-button:focus-visible,
 .cancel-button:focus-visible,
 .edit-button:focus-visible,
-.delete-button:focus-visible {
+.delete-button:focus-visible,
+.logout-button:focus-visible,
+.session-button:focus-visible {
   outline: 3px solid #9dd8ba;
   outline-offset: 2px;
 }
@@ -163,6 +232,24 @@ h1 {
   color: #e2e7e3;
   background: #69736c;
   cursor: not-allowed;
+}
+
+.logout-button,
+.session-button {
+  width: fit-content;
+  min-width: 7.5rem;
+  padding: 0.625rem 0.875rem;
+  color: #26322a;
+  font-weight: 700;
+  background: #ffffff;
+  border: 1px solid #7d8980;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.logout-button:hover,
+.session-button:hover {
+  background: #edf0ed;
 }
 
 .notes-message {
@@ -345,5 +432,14 @@ h1 {
 
   .create-note-section {
     margin-top: 3rem;
+  }
+
+  .login-section,
+  .session-section {
+    margin-top: 3rem;
+  }
+
+  .user-bar {
+    align-items: flex-start;
   }
 }

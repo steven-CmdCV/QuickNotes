@@ -1,7 +1,31 @@
 const API_URL = import.meta.env.VITE_API_URL;
 const normalizedApiUrl = API_URL?.replace(/\/+$/, '');
+let authToken = null;
 
-async function requestJson(path, { body, method = 'GET', signal } = {}) {
+class ApiError extends Error {
+  constructor(status) {
+    super('La respuesta del servidor no fue exitosa.');
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+function isValidPublicUser(user) {
+  return user
+    && typeof user === 'object'
+    && !Array.isArray(user)
+    && Number.isSafeInteger(user.id_usuario)
+    && user.id_usuario > 0
+    && typeof user.nombre === 'string'
+    && user.nombre.trim() !== ''
+    && typeof user.correo === 'string'
+    && user.correo.trim() !== '';
+}
+
+async function requestJson(
+  path,
+  { body, method = 'GET', signal, skipAuth = false } = {},
+) {
   if (!normalizedApiUrl) {
     throw new Error('La URL de la API no esta configurada.');
   }
@@ -15,6 +39,10 @@ async function requestJson(path, { body, method = 'GET', signal } = {}) {
     signal,
   };
 
+  if (!skipAuth && authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
@@ -23,10 +51,89 @@ async function requestJson(path, { body, method = 'GET', signal } = {}) {
   const response = await fetch(`${normalizedApiUrl}${path}`, options);
 
   if (!response.ok) {
-    throw new Error('La respuesta del servidor no fue exitosa.');
+    throw new ApiError(response.status);
   }
 
   return response.json();
+}
+
+function setAuthToken(token) {
+  if (typeof token !== 'string' || token.trim() === '') {
+    throw new Error('El token de autenticación no es válido.');
+  }
+
+  authToken = token.trim();
+}
+
+function clearAuthToken() {
+  authToken = null;
+}
+
+function isUnauthorizedError(error) {
+  return error instanceof ApiError && error.status === 401;
+}
+
+async function login(credentials, { signal } = {}) {
+  if (
+    !credentials
+    || typeof credentials !== 'object'
+    || Array.isArray(credentials)
+    || typeof credentials.correo !== 'string'
+    || typeof credentials.password !== 'string'
+  ) {
+    throw new Error('Las credenciales no son válidas.');
+  }
+
+  const email = credentials.correo.trim().toLowerCase();
+
+  if (!email || credentials.password.length === 0) {
+    throw new Error('Las credenciales no son válidas.');
+  }
+
+  const data = await requestJson('/api/auth/login', {
+    body: {
+      correo: email,
+      password: credentials.password,
+    },
+    method: 'POST',
+    signal,
+    skipAuth: true,
+  });
+
+  if (
+    !data
+    || data.success !== true
+    || !data.data
+    || typeof data.data !== 'object'
+    || Array.isArray(data.data)
+    || typeof data.data.token !== 'string'
+    || data.data.token.trim() === ''
+    || !isValidPublicUser(data.data.user)
+  ) {
+    throw new Error('La respuesta de autenticación no es válida.');
+  }
+
+  return {
+    token: data.data.token.trim(),
+    user: data.data.user,
+  };
+}
+
+async function getCurrentUser({ signal } = {}) {
+  const data = await requestJson('/api/auth/me', { signal });
+
+  if (
+    !data
+    || data.success !== true
+    || !data.data
+    || typeof data.data !== 'object'
+    || Array.isArray(data.data)
+    || !isValidPublicUser(data.data.user)
+  ) {
+    throw new Error('La respuesta de sesión no es válida.');
+  }
+
+  return data.data.user;
 }
 
 async function getHealth({ signal } = {}) {
@@ -169,11 +276,16 @@ async function deleteNote(noteId, { signal } = {}) {
 }
 
 export {
+  clearAuthToken,
   createNote,
   deleteNote,
   getCategories,
+  getCurrentUser,
   getHealth,
   getNotes,
+  isUnauthorizedError,
+  login,
+  setAuthToken,
   updateNote,
 };
 

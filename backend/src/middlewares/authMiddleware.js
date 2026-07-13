@@ -2,6 +2,7 @@ const {
   isKnownTokenError,
   verifyToken
 } = require('../services/tokenService');
+const userModel = require('../models/userModel');
 
 function authMiddleware(req, res, next) {
   const authorization = req.get('authorization');
@@ -29,6 +30,15 @@ function authMiddleware(req, res, next) {
     const userId = Number(payload.sub);
 
     if (!Number.isSafeInteger(userId)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Token inválido o expirado.'
+      });
+    }
+
+    const user = userModel.getPublicUserById(userId);
+
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Token inválido o expirado.'

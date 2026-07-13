@@ -1,9 +1,6 @@
 const noteModel = require('../models/noteModel');
 const categoryModel = require('../models/categoryModel');
 
-// Solucion provisional hasta que la autenticacion determine el usuario actual.
-const DEMO_USER_ID = 1;
-
 function parseNoteId(idParam) {
   if (!/^[1-9]\d*$/.test(idParam)) {
     return null;
@@ -115,8 +112,10 @@ function validateNoteBody(requestBody, options = {}) {
 }
 
 function getNotes(req, res) {
+  const userId = req.user.id_usuario;
+
   try {
-    const notes = noteModel.getNotesByUserId(DEMO_USER_ID);
+    const notes = noteModel.getNotesByUserId(userId);
 
     return res.json({
       success: true,
@@ -133,6 +132,7 @@ function getNotes(req, res) {
 }
 
 function getNoteById(req, res) {
+  const userId = req.user.id_usuario;
   const noteId = parseNoteId(req.params.id);
 
   if (noteId === null) {
@@ -143,7 +143,7 @@ function getNoteById(req, res) {
   }
 
   try {
-    const note = noteModel.getNoteByIdAndUserId(noteId, DEMO_USER_ID);
+    const note = noteModel.getNoteByIdAndUserId(noteId, userId);
 
     if (!note) {
       return res.status(404).json({
@@ -167,6 +167,7 @@ function getNoteById(req, res) {
 }
 
 function createNote(req, res) {
+  const userId = req.user.id_usuario;
   const validation = validateNoteBody(req.body);
 
   if (validation.error) {
@@ -187,7 +188,7 @@ function createNote(req, res) {
 
   try {
     const note = noteModel.createNote({
-      userId: DEMO_USER_ID,
+      userId,
       categoryId,
       title,
       content,
@@ -209,6 +210,7 @@ function createNote(req, res) {
 }
 
 function updateNote(req, res) {
+  const userId = req.user.id_usuario;
   const noteId = parseNoteId(req.params.id);
 
   if (noteId === null) {
@@ -243,7 +245,7 @@ function updateNote(req, res) {
 
     const note = noteModel.updateNote({
       noteId,
-      userId: DEMO_USER_ID,
+      userId,
       categoryId,
       title,
       content,
@@ -272,6 +274,7 @@ function updateNote(req, res) {
 }
 
 function deleteNote(req, res) {
+  const userId = req.user.id_usuario;
   const noteId = parseNoteId(req.params.id);
 
   if (noteId === null) {
@@ -284,7 +287,7 @@ function deleteNote(req, res) {
   try {
     const wasDeleted = noteModel.deleteNoteByIdAndUserId(
       noteId,
-      DEMO_USER_ID
+      userId
     );
 
     if (!wasDeleted) {

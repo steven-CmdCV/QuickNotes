@@ -31,6 +31,12 @@ describe('Quick Notes API', { concurrency: false }, () => {
   let app;
   let db;
   let testDatabase;
+  let demoToken;
+  let secondUserId;
+  let secondUserToken;
+  let secondUserNoteId;
+  let emptyUserToken;
+  let nonexistentUserToken;
   let createdNoteId;
   let createdNoteDate;
 
@@ -53,8 +59,51 @@ describe('Quick Notes API', { concurrency: false }, () => {
 
     app = require('../src/app');
     db = require('../src/config/db');
+    const { createToken } = require('../src/services/tokenService');
 
     assert.strictEqual(db.pragma('foreign_keys', { simple: true }), 1);
+
+    demoToken = createToken(1);
+
+    const secondUserResult = db.prepare(`
+      INSERT INTO usuarios (nombre, correo, password_hash)
+      VALUES (?, ?, ?)
+    `).run(
+      'Usuario de aislamiento',
+      'aislamiento@quicknotes.local',
+      'hash-ficticio-no-utilizado'
+    );
+    secondUserId = Number(secondUserResult.lastInsertRowid);
+    secondUserToken = createToken(secondUserId);
+
+    const secondUserNoteResult = db.prepare(`
+      INSERT INTO notas (
+        id_usuario,
+        id_categoria,
+        titulo,
+        contenido,
+        es_favorita
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      secondUserId,
+      2,
+      'Nota aislada',
+      'Pertenece exclusivamente al segundo usuario.',
+      0
+    );
+    secondUserNoteId = Number(secondUserNoteResult.lastInsertRowid);
+
+    const emptyUserResult = db.prepare(`
+      INSERT INTO usuarios (nombre, correo, password_hash)
+      VALUES (?, ?, ?)
+    `).run(
+      'Usuario sin notas',
+      'sin-notas@quicknotes.local',
+      'hash-ficticio-no-utilizado'
+    );
+    emptyUserToken = createToken(Number(emptyUserResult.lastInsertRowid));
+    nonexistentUserToken = createToken(9999);
 
     console.log(JSON.stringify({
       testDatabasePath: testDatabase.databasePath,
@@ -353,8 +402,93 @@ describe('Quick Notes API', { concurrency: false }, () => {
     assert.strictEqual(response.text.includes('password_hash'), false);
   });
 
-  test('GET /api/notes devuelve las dos notas demo', async () => {
-    const response = await request(app).get('/api/notes').expect(200);
+  test('GET /api/notes exige autenticacion', async () => {
+    const response = await request(app).get('/api/notes').expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('GET /api/notes/:id exige autenticacion', async () => {
+    const response = await request(app).get('/api/notes/1').expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('GET /api/notes/abc autentica antes de validar el ID', async () => {
+    const response = await request(app).get('/api/notes/abc').expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('POST /api/notes autentica antes de validar cuerpo y categoria', async () => {
+    const response = await request(app)
+      .post('/api/notes')
+      .send({
+        titulo: '   ',
+        contenido: 'Esta nota no debe crearse.',
+        id_categoria: 9999,
+        es_favorita: false
+      })
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('PUT /api/notes/:id exige autenticacion', async () => {
+    const response = await request(app)
+      .put('/api/notes/1')
+      .send({
+        titulo: 'Sin autenticacion',
+        contenido: 'Esta nota no debe actualizarse.',
+        id_categoria: null,
+        es_favorita: false
+      })
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('DELETE /api/notes/:id exige autenticacion', async () => {
+    const response = await request(app).delete('/api/notes/1').expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('GET /api/notes rechaza el token de un usuario inexistente', async () => {
+    const response = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${nonexistentUserToken}`)
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('GET /api/notes devuelve las dos notas demo autenticadas', async () => {
+    const response = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(200);
 
     assert.strictEqual(response.body.success, true);
     assert.ok(Array.isArray(response.body.data));
@@ -370,8 +504,39 @@ describe('Quick Notes API', { concurrency: false }, () => {
     );
   });
 
+  test('GET /api/notes aisla el listado del segundo usuario', async () => {
+    const response = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${secondUserToken}`)
+      .expect(200);
+
+    assert.strictEqual(response.body.success, true);
+    assert.deepStrictEqual(
+      response.body.data.map((note) => note.id_nota),
+      [secondUserNoteId]
+    );
+    assert.ok(
+      response.body.data.every((note) => note.id_usuario === secondUserId)
+    );
+  });
+
+  test('GET /api/notes devuelve un arreglo vacio al usuario sin notas', async () => {
+    const response = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${emptyUserToken}`)
+      .expect(200);
+
+    assert.deepStrictEqual(response.body, {
+      success: true,
+      data: []
+    });
+  });
+
   test('GET /api/notes/1 devuelve una nota como objeto', async () => {
-    const response = await request(app).get('/api/notes/1').expect(200);
+    const response = await request(app)
+      .get('/api/notes/1')
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(200);
 
     assert.strictEqual(response.body.success, true);
     assert.strictEqual(Array.isArray(response.body.data), false);
@@ -379,7 +544,10 @@ describe('Quick Notes API', { concurrency: false }, () => {
   });
 
   test('GET /api/notes/9999 devuelve nota no encontrada', async () => {
-    const response = await request(app).get('/api/notes/9999').expect(404);
+    const response = await request(app)
+      .get('/api/notes/9999')
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(404);
 
     assert.deepStrictEqual(response.body, {
       success: false,
@@ -388,7 +556,10 @@ describe('Quick Notes API', { concurrency: false }, () => {
   });
 
   test('GET /api/notes/abc rechaza un identificador invalido', async () => {
-    const response = await request(app).get('/api/notes/abc').expect(400);
+    const response = await request(app)
+      .get('/api/notes/abc')
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(400);
 
     assert.deepStrictEqual(response.body, {
       success: false,
@@ -396,14 +567,70 @@ describe('Quick Notes API', { concurrency: false }, () => {
     });
   });
 
+  test('el segundo usuario no puede consultar una nota demo', async () => {
+    const response = await request(app)
+      .get('/api/notes/1')
+      .set('Authorization', `Bearer ${secondUserToken}`)
+      .expect(404);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Nota no encontrada.'
+    });
+  });
+
+  test('el segundo usuario no puede modificar ni eliminar una nota demo', async () => {
+    const noteBefore = db.prepare(`
+      SELECT titulo, contenido, id_categoria, es_favorita
+      FROM notas
+      WHERE id_nota = 1
+    `).get();
+
+    const updateResponse = await request(app)
+      .put('/api/notes/1')
+      .set('Authorization', `Bearer ${secondUserToken}`)
+      .send({
+        titulo: 'Intento ajeno',
+        contenido: 'No debe modificar la nota demo.',
+        id_categoria: null,
+        es_favorita: false
+      })
+      .expect(404);
+
+    assert.deepStrictEqual(updateResponse.body, {
+      success: false,
+      message: 'Nota no encontrada.'
+    });
+
+    const deleteResponse = await request(app)
+      .delete('/api/notes/1')
+      .set('Authorization', `Bearer ${secondUserToken}`)
+      .expect(404);
+
+    assert.deepStrictEqual(deleteResponse.body, {
+      success: false,
+      message: 'Nota no encontrada.'
+    });
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT titulo, contenido, id_categoria, es_favorita
+        FROM notas
+        WHERE id_nota = 1
+      `).get(),
+      noteBefore
+    );
+  });
+
   test('POST /api/notes crea una nota para el usuario demo', async () => {
     const response = await request(app)
       .post('/api/notes')
+      .set('Authorization', `Bearer ${demoToken}`)
       .send({
         titulo: 'Nota temporal automatizada',
         contenido: 'Creada por la suite de integracion.',
         id_categoria: 1,
-        es_favorita: false
+        es_favorita: false,
+        id_usuario: secondUserId
       })
       .expect(201);
 
@@ -417,6 +644,7 @@ describe('Quick Notes API', { concurrency: false }, () => {
 
     const detailResponse = await request(app)
       .get(`/api/notes/${createdNoteId}`)
+      .set('Authorization', `Bearer ${demoToken}`)
       .expect(200);
 
     assert.strictEqual(detailResponse.body.data.id_nota, createdNoteId);
@@ -427,6 +655,7 @@ describe('Quick Notes API', { concurrency: false }, () => {
 
     const response = await request(app)
       .put(`/api/notes/${createdNoteId}`)
+      .set('Authorization', `Bearer ${demoToken}`)
       .send({
         titulo: 'Nota temporal actualizada',
         contenido: 'Contenido actualizado por la suite.',
@@ -452,19 +681,60 @@ describe('Quick Notes API', { concurrency: false }, () => {
 
     const response = await request(app)
       .delete(`/api/notes/${createdNoteId}`)
+      .set('Authorization', `Bearer ${demoToken}`)
       .expect(200);
 
     assert.strictEqual(response.body.success, true);
     assert.strictEqual(response.body.data.id_nota, createdNoteId);
 
-    await request(app).get(`/api/notes/${createdNoteId}`).expect(404);
+    await request(app)
+      .get(`/api/notes/${createdNoteId}`)
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(404);
 
-    const listResponse = await request(app).get('/api/notes').expect(200);
+    const listResponse = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(200);
 
     assert.deepStrictEqual(
       listResponse.body.data.map((note) => note.id_nota),
       [1, 2]
     );
+  });
+
+  test('el segundo usuario crea una nota propia aislada del usuario demo', async () => {
+    const createResponse = await request(app)
+      .post('/api/notes')
+      .set('Authorization', `Bearer ${secondUserToken}`)
+      .send({
+        titulo: 'Nueva nota aislada',
+        contenido: 'Creada por el segundo usuario.',
+        id_categoria: null,
+        es_favorita: true,
+        id_usuario: 1
+      })
+      .expect(201);
+    const newNoteId = createResponse.body.data.id_nota;
+
+    assert.strictEqual(createResponse.body.success, true);
+    assert.strictEqual(createResponse.body.data.id_usuario, secondUserId);
+    assert.strictEqual(typeof newNoteId, 'number');
+    assert.strictEqual(
+      db.prepare('SELECT id_usuario FROM notas WHERE id_nota = ?')
+        .get(newNoteId).id_usuario,
+      secondUserId
+    );
+
+    const demoResponse = await request(app)
+      .get(`/api/notes/${newNoteId}`)
+      .set('Authorization', `Bearer ${demoToken}`)
+      .expect(404);
+
+    assert.deepStrictEqual(demoResponse.body, {
+      success: false,
+      message: 'Nota no encontrada.'
+    });
   });
 
   test('GET /api/unknown devuelve la ruta no encontrada', async () => {
@@ -479,6 +749,7 @@ describe('Quick Notes API', { concurrency: false }, () => {
   test('POST /api/notes rechaza JSON malformado sin exponer detalles', async () => {
     const response = await request(app)
       .post('/api/notes')
+      .set('Authorization', `Bearer ${demoToken}`)
       .set('Content-Type', 'application/json')
       .send('{"titulo":"Prueba","contenido":')
       .expect('Content-Type', /json/)

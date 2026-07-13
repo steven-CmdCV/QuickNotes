@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import CreateNoteForm from './components/CreateNoteForm.jsx';
 import LoginForm from './components/LoginForm.jsx';
 import NotesList from './components/NotesList.jsx';
+import RegisterForm from './components/RegisterForm.jsx';
 import {
   clearAuthToken,
   clearUnauthorizedHandler,
@@ -46,6 +47,7 @@ function App() {
   });
   const [verificationKey, setVerificationKey] = useState(0);
   const [authNotice, setAuthNotice] = useState(null);
+  const [authMode, setAuthMode] = useState('login');
   const verificationControllerRef = useRef(null);
   const storedTokenRef = useRef({
     initialized: false,
@@ -59,6 +61,7 @@ function App() {
       clearAuthToken();
       storedTokenRef.current = { initialized: true, value: null };
       setAuthNotice(EXPIRED_SESSION_NOTICE);
+      setAuthMode('login');
       setAuthState((currentState) => {
         if (
           currentState.status === 'anonymous'
@@ -122,6 +125,7 @@ function App() {
         } catch {
           clearAuthToken();
           storedTokenRef.current = { initialized: true, value: null };
+          setAuthMode('login');
           setAuthState({
             status: 'anonymous',
             user: null,
@@ -138,6 +142,7 @@ function App() {
       if (!normalizedToken) {
         clearAuthToken();
         storedTokenRef.current = { initialized: true, value: null };
+        setAuthMode('login');
         const storageWasCleared = removeStoredToken();
         setAuthState({
           status: 'anonymous',
@@ -174,6 +179,7 @@ function App() {
           storedTokenRef.current = { initialized: true, value: null };
           const storageWasCleared = removeStoredToken();
           setAuthNotice(null);
+          setAuthMode('login');
           setAuthState({
             status: 'anonymous',
             user: null,
@@ -222,6 +228,7 @@ function App() {
       }
 
       storedTokenRef.current = { initialized: true, value: null };
+      setAuthMode('login');
       setAuthState({ status: 'anonymous', user: null, message: null });
       return false;
     }
@@ -231,6 +238,7 @@ function App() {
       value: session.token,
     };
     setAuthNotice(null);
+    setAuthMode('login');
     setAuthState({
       status: 'authenticated',
       user: session.user,
@@ -263,11 +271,22 @@ function App() {
 
     storedTokenRef.current = { initialized: true, value: null };
     setAuthNotice(null);
+    setAuthMode('login');
     setAuthState({
       status: 'anonymous',
       user: null,
       message: storageWasCleared ? null : 'No se pudo iniciar sesión.',
     });
+  }
+
+  function handleShowRegister() {
+    setAuthNotice(null);
+    setAuthMode('register');
+  }
+
+  function handleShowLogin() {
+    setAuthNotice(null);
+    setAuthMode('login');
   }
 
   let authContent;
@@ -312,11 +331,19 @@ function App() {
             {authState.message}
           </p>
         )}
-        <LoginForm
-          notice={authNotice}
-          onAuthenticated={handleAuthenticated}
-          onLoginAttempt={() => setAuthNotice(null)}
-        />
+        {authMode === 'login' ? (
+          <LoginForm
+            notice={authNotice}
+            onAuthenticated={handleAuthenticated}
+            onLoginAttempt={() => setAuthNotice(null)}
+            onShowRegister={handleShowRegister}
+          />
+        ) : (
+          <RegisterForm
+            onAuthenticated={handleAuthenticated}
+            onShowLogin={handleShowLogin}
+          />
+        )}
       </>
     );
   } else {

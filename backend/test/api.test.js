@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('node:assert/strict');
 const { after, before, describe, test } = require('node:test');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const {
@@ -13,6 +14,7 @@ const {
 
 const DEMO_EMAIL = 'demo@quicknotes.local';
 const DEMO_PASSWORD = 'QuickNotesDemo2026!';
+const REGISTERED_EMAIL = 'registro@quicknotes.local';
 const TEST_JWT_SECRET = 'quick-notes-integration-test-secret';
 
 describe('Quick Notes API', { concurrency: false }, () => {
@@ -39,6 +41,10 @@ describe('Quick Notes API', { concurrency: false }, () => {
   let nonexistentUserToken;
   let createdNoteId;
   let createdNoteDate;
+  let registeredUserId;
+  let registeredUserToken;
+  let concurrentUserId;
+  let concurrentUserToken;
 
   before(() => {
     testDatabase = createTestDatabase();
@@ -167,6 +173,289 @@ describe('Quick Notes API', { concurrency: false }, () => {
       'Recordatorios',
       'Trabajo'
     ]);
+  });
+
+  test('POST /api/auth/register crea una sesion y normaliza el usuario', async () => {
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        nombre: '  Usuario Registrado  ',
+        correo: `  ${REGISTERED_EMAIL.toUpperCase()}  `,
+        password: DEMO_PASSWORD,
+        password_confirmation: 'no se envia al modelo',
+        password_hash: 'no se acepta desde el cliente'
+      })
+      .expect(201);
+
+    registeredUserId = response.body.data.user.id_usuario;
+    registeredUserToken = response.body.data.token;
+
+    assert.strictEqual(response.body.success, true);
+    assert.strictEqual(typeof registeredUserId, 'number');
+    assert.strictEqual(typeof registeredUserToken, 'string');
+    assert.strictEqual(response.body.data.token_type, 'Bearer');
+    assert.strictEqual(response.body.data.expires_in, 7200);
+    assert.deepStrictEqual(response.body.data.user, {
+      id_usuario: registeredUserId,
+      nombre: 'Usuario Registrado',
+      correo: REGISTERED_EMAIL
+    });
+    assert.strictEqual(response.text.includes('password_hash'), false);
+    assert.strictEqual(response.text.includes(DEMO_PASSWORD), false);
+  });
+
+  test('POST /api/auth/register persiste un hash bcrypt valido', async () => {
+    const storedUser = db.prepare(`
+      SELECT nombre, correo, password_hash
+      FROM usuarios
+      WHERE id_usuario = ?
+    `).get(registeredUserId);
+
+    assert.strictEqual(storedUser.nombre, 'Usuario Registrado');
+    assert.strictEqual(storedUser.correo, REGISTERED_EMAIL);
+    assert.notStrictEqual(storedUser.password_hash, DEMO_PASSWORD);
+    assert.strictEqual(bcrypt.getRounds(storedUser.password_hash), 10);
+    assert.strictEqual(
+      await bcrypt.compare(DEMO_PASSWORD, storedUser.password_hash),
+      true
+    );
+  });
+
+  test('POST /api/auth/register rechaza un correo duplicado', async () => {
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        nombre: 'Duplicado',
+        correo: REGISTERED_EMAIL,
+        password: DEMO_PASSWORD
+      })
+      .expect(409);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Ya existe una cuenta con ese correo.'
+    });
+  });
+
+  test('POST /api/auth/register detecta duplicados con espacios y mayusculas', async () => {
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({
+        nombre: 'Duplicado normalizado',
+        correo: `  ${REGISTERED_EMAIL.toUpperCase()}  `,
+        password: DEMO_PASSWORD
+      })
+      .expect(409);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Ya existe una cuenta con ese correo.'
+    });
+  });
+
+  test('dos registros concurrentes producen un exito y un conflicto', async () => {
+    const email = 'concurrente@quicknotes.local';
+    const responses = await Promise.all([
+      request(app).post('/api/auth/register').send({
+        nombre: 'Usuario Concurrente A',
+        correo: email,
+        password: DEMO_PASSWORD
+      }),
+      request(app).post('/api/auth/register').send({
+        nombre: 'Usuario Concurrente B',
+        correo: email.toUpperCase(),
+        password: DEMO_PASSWORD
+      })
+    ]);
+    const statuses = responses.map((response) => response.status).sort();
+    const successfulResponse = responses.find(
+      (response) => response.status === 201
+    );
+
+    assert.deepStrictEqual(statuses, [201, 409]);
+    assert.strictEqual(
+      db.prepare('SELECT COUNT(*) FROM usuarios WHERE correo = ?')
+        .pluck()
+        .get(email),
+      1
+    );
+    concurrentUserId = successfulResponse.body.data.user.id_usuario;
+    concurrentUserToken = successfulResponse.body.data.token;
+  });
+
+  test('POST /api/auth/register valida el nombre', async () => {
+    const invalidBodies = [
+      { correo: 'nombre-1@quicknotes.local', password: DEMO_PASSWORD },
+      {
+        nombre: 10,
+        correo: 'nombre-2@quicknotes.local',
+        password: DEMO_PASSWORD
+      },
+      {
+        nombre: '   ',
+        correo: 'nombre-3@quicknotes.local',
+        password: DEMO_PASSWORD
+      },
+      {
+        nombre: 'a'.repeat(101),
+        correo: 'nombre-4@quicknotes.local',
+        password: DEMO_PASSWORD
+      }
+    ];
+
+    for (const body of invalidBodies) {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send(body);
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+    }
+  });
+
+  test('POST /api/auth/register valida el correo', async () => {
+    const invalidBodies = [
+      { nombre: 'Correo 1', password: DEMO_PASSWORD },
+      { nombre: 'Correo 2', correo: 10, password: DEMO_PASSWORD },
+      { nombre: 'Correo 3', correo: '   ', password: DEMO_PASSWORD },
+      {
+        nombre: 'Correo 4',
+        correo: 'correo-invalido',
+        password: DEMO_PASSWORD
+      },
+      {
+        nombre: 'Correo 5',
+        correo: `${'a'.repeat(250)}@test.com`,
+        password: DEMO_PASSWORD
+      }
+    ];
+
+    for (const body of invalidBodies) {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send(body);
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+    }
+  });
+
+  test('POST /api/auth/register valida la contrasena', async () => {
+    const invalidBodies = [
+      { nombre: 'Password 1', correo: 'password-1@quicknotes.local' },
+      {
+        nombre: 'Password 2',
+        correo: 'password-2@quicknotes.local',
+        password: 10
+      },
+      {
+        nombre: 'Password 3',
+        correo: 'password-3@quicknotes.local',
+        password: 'corta'
+      },
+      {
+        nombre: 'Password 4',
+        correo: 'password-4@quicknotes.local',
+        password: 'a'.repeat(73)
+      }
+    ];
+
+    for (const body of invalidBodies) {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send(body);
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+    }
+  });
+
+  test('el token del registro funciona con GET /api/auth/me', async () => {
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .expect(200);
+
+    assert.deepStrictEqual(response.body, {
+      success: true,
+      data: {
+        user: {
+          id_usuario: registeredUserId,
+          nombre: 'Usuario Registrado',
+          correo: REGISTERED_EMAIL
+        }
+      }
+    });
+    assert.strictEqual(response.text.includes('password_hash'), false);
+  });
+
+  test('el usuario registrado puede iniciar sesion posteriormente', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: REGISTERED_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+
+    assert.strictEqual(response.body.success, true);
+    assert.strictEqual(response.body.data.user.id_usuario, registeredUserId);
+    assert.strictEqual(response.text.includes('password_hash'), false);
+  });
+
+  test('el usuario registrado comienza sin notas', async () => {
+    const response = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .expect(200);
+
+    assert.deepStrictEqual(response.body, {
+      success: true,
+      data: []
+    });
+  });
+
+  test('dos usuarios registrados mantienen sus notas aisladas', async () => {
+    const firstNote = await request(app)
+      .post('/api/notes')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .send({
+        titulo: 'Nota del registro principal',
+        contenido: 'Solo debe verla el primer usuario registrado.',
+        id_categoria: null,
+        es_favorita: false
+      })
+      .expect(201);
+    const secondNote = await request(app)
+      .post('/api/notes')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .send({
+        titulo: 'Nota del registro concurrente',
+        contenido: 'Solo debe verla el segundo usuario registrado.',
+        id_categoria: null,
+        es_favorita: false
+      })
+      .expect(201);
+    const firstList = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .expect(200);
+    const secondList = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .expect(200);
+
+    assert.deepStrictEqual(
+      firstList.body.data.map((note) => note.id_nota),
+      [firstNote.body.data.id_nota]
+    );
+    assert.deepStrictEqual(
+      secondList.body.data.map((note) => note.id_nota),
+      [secondNote.body.data.id_nota]
+    );
+    assert.ok(firstList.body.data.every(
+      (note) => note.id_usuario === registeredUserId
+    ));
+    assert.ok(secondList.body.data.every(
+      (note) => note.id_usuario === concurrentUserId
+    ));
   });
 
   test('POST /api/auth/login autentica al usuario demo', async () => {

@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { isUnauthorizedError, login } from '../services/api.js';
 
-function LoginForm({ notice, onAuthenticated, onLoginAttempt }) {
+function LoginForm({
+  notice,
+  onAuthenticated,
+  onLoginAttempt,
+  onShowRegister,
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submissionState, setSubmissionState] = useState('idle');
@@ -159,6 +164,16 @@ function LoginForm({ notice, onAuthenticated, onLoginAttempt }) {
           </p>
         )}
       </form>
+      <div className="auth-switch">
+        <p>¿No tienes una cuenta?</p>
+        <button
+          className="auth-switch-button"
+          type="button"
+          onClick={onShowRegister}
+        >
+          Crear cuenta
+        </button>
+      </div>
     </section>
   );
 }

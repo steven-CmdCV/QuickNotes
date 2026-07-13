@@ -115,6 +115,30 @@ function isUnauthorizedError(error) {
   return error instanceof ApiError && error.status === 401;
 }
 
+function getApiErrorStatus(error) {
+  return error instanceof ApiError ? error.status : null;
+}
+
+function parseSessionResponse(data, errorMessage) {
+  if (
+    !data
+    || data.success !== true
+    || !data.data
+    || typeof data.data !== 'object'
+    || Array.isArray(data.data)
+    || typeof data.data.token !== 'string'
+    || data.data.token.trim() === ''
+    || !isValidPublicUser(data.data.user)
+  ) {
+    throw new Error(errorMessage);
+  }
+
+  return {
+    token: data.data.token.trim(),
+    user: data.data.user,
+  };
+}
+
 async function login(credentials, { signal } = {}) {
   if (
     !credentials
@@ -143,23 +167,56 @@ async function login(credentials, { signal } = {}) {
     notifyUnauthorized: false,
   });
 
+  return parseSessionResponse(
+    data,
+    'La respuesta de autenticación no es válida.',
+  );
+}
+
+async function registerUser(registration, { signal } = {}) {
   if (
-    !data
-    || data.success !== true
-    || !data.data
-    || typeof data.data !== 'object'
-    || Array.isArray(data.data)
-    || typeof data.data.token !== 'string'
-    || data.data.token.trim() === ''
-    || !isValidPublicUser(data.data.user)
+    !registration
+    || typeof registration !== 'object'
+    || Array.isArray(registration)
+    || typeof registration.nombre !== 'string'
+    || typeof registration.correo !== 'string'
+    || typeof registration.password !== 'string'
   ) {
-    throw new Error('La respuesta de autenticación no es válida.');
+    throw new Error('Los datos de registro no son válidos.');
   }
 
-  return {
-    token: data.data.token.trim(),
-    user: data.data.user,
-  };
+  const name = registration.nombre.trim();
+  const email = registration.correo.trim().toLowerCase();
+  const password = registration.password;
+
+  if (
+    !name
+    || name.length > 100
+    || !email
+    || email.length > 254
+    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    || password.length < 8
+    || new TextEncoder().encode(password).length > 72
+  ) {
+    throw new Error('Los datos de registro no son válidos.');
+  }
+
+  const data = await requestJson('/api/auth/register', {
+    body: {
+      nombre: name,
+      correo: email,
+      password,
+    },
+    method: 'POST',
+    notifyUnauthorized: false,
+    signal,
+    skipAuth: true,
+  });
+
+  return parseSessionResponse(
+    data,
+    'La respuesta de registro no es válida.',
+  );
 }
 
 async function getCurrentUser({ signal } = {}) {
@@ -336,8 +393,10 @@ export {
   getCurrentUser,
   getHealth,
   getNotes,
+  getApiErrorStatus,
   isUnauthorizedError,
   login,
+  registerUser,
   setAuthToken,
   setUnauthorizedHandler,
   updateNote,

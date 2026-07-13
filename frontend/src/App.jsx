@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import CreateNoteForm from './components/CreateNoteForm.jsx';
 import LoginForm from './components/LoginForm.jsx';
 import NotesList from './components/NotesList.jsx';
+import ProfilePanel from './components/ProfilePanel.jsx';
 import RegisterForm from './components/RegisterForm.jsx';
 import {
   clearAuthToken,
@@ -16,6 +17,7 @@ import './App.css';
 
 const AUTH_TOKEN_KEY = 'quicknotes.authToken';
 const EXPIRED_SESSION_NOTICE = 'Tu sesión expiró. Inicia sesión nuevamente.';
+const DELETED_ACCOUNT_NOTICE = 'Tu cuenta fue eliminada correctamente.';
 
 const connectionMessages = {
   loading: 'Comprobando conexión con el servidor...',
@@ -48,31 +50,45 @@ function App() {
   const [verificationKey, setVerificationKey] = useState(0);
   const [authNotice, setAuthNotice] = useState(null);
   const [authMode, setAuthMode] = useState('login');
+  const [showProfile, setShowProfile] = useState(false);
   const verificationControllerRef = useRef(null);
   const storedTokenRef = useRef({
     initialized: false,
     value: null,
   });
 
+  const clearLocalSession = useCallback(({
+    notice = null,
+    reportStorageFailure = false,
+  } = {}) => {
+    verificationControllerRef.current?.abort();
+    clearAuthToken();
+    const storageWasCleared = removeStoredToken();
+
+    storedTokenRef.current = { initialized: true, value: null };
+    setShowProfile(false);
+    setAuthNotice(notice);
+    setAuthMode('login');
+    setAuthState((currentState) => {
+      const message = reportStorageFailure && !storageWasCleared
+        ? 'No se pudo iniciar sesión.'
+        : null;
+
+      if (
+        currentState.status === 'anonymous'
+        && currentState.user === null
+        && currentState.message === message
+      ) {
+        return currentState;
+      }
+
+      return { status: 'anonymous', user: null, message };
+    });
+  }, []);
+
   useEffect(() => {
     function handleUnauthorized() {
-      verificationControllerRef.current?.abort();
-      removeStoredToken();
-      clearAuthToken();
-      storedTokenRef.current = { initialized: true, value: null };
-      setAuthNotice(EXPIRED_SESSION_NOTICE);
-      setAuthMode('login');
-      setAuthState((currentState) => {
-        if (
-          currentState.status === 'anonymous'
-          && currentState.user === null
-          && currentState.message === null
-        ) {
-          return currentState;
-        }
-
-        return { status: 'anonymous', user: null, message: null };
-      });
+      clearLocalSession({ notice: EXPIRED_SESSION_NOTICE });
     }
 
     setUnauthorizedHandler(handleUnauthorized);
@@ -80,7 +96,7 @@ function App() {
     return () => {
       clearUnauthorizedHandler(handleUnauthorized);
     };
-  }, []);
+  }, [clearLocalSession]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -237,6 +253,7 @@ function App() {
       initialized: true,
       value: session.token,
     };
+    setShowProfile(false);
     setAuthNotice(null);
     setAuthMode('login');
     setAuthState({
@@ -254,29 +271,21 @@ function App() {
   }
 
   function handleLogout() {
-    verificationControllerRef.current?.abort();
-    clearAuthToken();
+    clearLocalSession({ reportStorageFailure: true });
+  }
 
-    let storageWasCleared = true;
-
-    try {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
-    } catch {
-      try {
-        sessionStorage.setItem(AUTH_TOKEN_KEY, '');
-      } catch {
-        storageWasCleared = false;
+  function handleProfileUpdated(user) {
+    setAuthState((currentState) => {
+      if (currentState.status !== 'authenticated') {
+        return currentState;
       }
-    }
 
-    storedTokenRef.current = { initialized: true, value: null };
-    setAuthNotice(null);
-    setAuthMode('login');
-    setAuthState({
-      status: 'anonymous',
-      user: null,
-      message: storageWasCleared ? null : 'No se pudo iniciar sesión.',
+      return { ...currentState, user };
     });
+  }
+
+  function handleAccountDeleted() {
+    clearLocalSession({ notice: DELETED_ACCOUNT_NOTICE });
   }
 
   function handleShowRegister() {
@@ -349,6 +358,16 @@ function App() {
   } else {
     authContent = (
       <>
+        <div className="profile-slot">
+          {showProfile && (
+            <ProfilePanel
+              user={authState.user}
+              onUpdated={handleProfileUpdated}
+              onDeleted={handleAccountDeleted}
+              onClose={() => setShowProfile(false)}
+            />
+          )}
+        </div>
         <CreateNoteForm onNoteCreated={handleNoteCreated} />
         <NotesList refreshKey={notesRefreshKey} />
       </>
@@ -377,13 +396,24 @@ function App() {
               <p className="user-name">{authState.user.nombre}</p>
               <p className="user-email">{authState.user.correo}</p>
             </div>
-            <button
-              className="logout-button"
-              type="button"
-              onClick={handleLogout}
-            >
-              Cerrar sesión
-            </button>
+            <div className="user-actions">
+              <button
+                className="profile-button"
+                type="button"
+                aria-controls="profile-panel"
+                aria-expanded={showProfile}
+                onClick={() => setShowProfile((currentValue) => !currentValue)}
+              >
+                Mi perfil
+              </button>
+              <button
+                className="logout-button"
+                type="button"
+                onClick={handleLogout}
+              >
+                Cerrar sesión
+              </button>
+            </div>
           </div>
         )}
       </header>

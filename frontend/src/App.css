@@ -64,6 +64,13 @@
   max-width: 31rem;
 }
 
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+
 .user-name,
 .user-email {
   margin: 0;
@@ -83,6 +90,7 @@
 
 .create-note-section,
 .notes-section,
+.profile-section,
 .session-section {
   width: 100%;
   margin-top: 3.5rem;
@@ -100,12 +108,42 @@
 
 .create-note-section h2,
 .notes-section h2,
+.profile-section h2,
 .login-section h2,
 .register-section h2 {
   margin: 0 0 1.25rem;
   color: var(--color-text);
   font-size: 1.5rem;
   line-height: 1.25;
+}
+
+.profile-slot:empty {
+  display: none;
+}
+
+.profile-section {
+  max-width: 46rem;
+  padding: 0 0 2rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.profile-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-heading h2 {
+  margin-bottom: 0.5rem;
+}
+
+.profile-heading p,
+.profile-danger-zone p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
 }
 
 .required-note {
@@ -118,9 +156,43 @@
 .login-form,
 .register-form,
 .note-form,
-.edit-note-form {
+.edit-note-form,
+.profile-form,
+.profile-delete-form {
   display: grid;
   gap: 1.25rem;
+}
+
+.profile-form {
+  max-width: 38rem;
+}
+
+.profile-danger-zone {
+  max-width: 38rem;
+  padding: 1.25rem 0 0 1rem;
+  margin-top: 2rem;
+  border-top: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-error);
+}
+
+.profile-danger-zone h3 {
+  margin: 0 0 0.5rem;
+  color: var(--color-text);
+  font-size: 1.125rem;
+}
+
+.profile-danger-zone > button {
+  margin-top: 1rem;
+}
+
+.profile-delete-form {
+  margin-top: 1rem;
+}
+
+.profile-delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
 }
 
 .note-form {
@@ -213,6 +285,10 @@
 
 .submit-button,
 .logout-button,
+.profile-button,
+.profile-close-button,
+.profile-delete-button,
+.profile-delete-confirm-button,
 .session-button,
 .auth-switch-button,
 .edit-button,
@@ -241,6 +317,8 @@
 }
 
 .logout-button,
+.profile-button,
+.profile-close-button,
 .session-button,
 .auth-switch-button,
 .edit-button,
@@ -252,6 +330,8 @@
 }
 
 .logout-button,
+.profile-button,
+.profile-close-button,
 .session-button {
   min-width: 7.5rem;
 }
@@ -265,13 +345,37 @@
   white-space: nowrap;
 }
 
+.profile-delete-button,
+.profile-delete-confirm-button {
+  color: var(--color-error);
+  background: var(--color-surface);
+  border: 1px solid var(--color-error);
+}
+
+.profile-delete-confirm-button {
+  color: var(--color-surface);
+  background: var(--color-error);
+}
+
 .logout-button:hover:not(:disabled),
+.profile-button:hover:not(:disabled),
+.profile-close-button:hover:not(:disabled),
 .session-button:hover:not(:disabled),
 .auth-switch-button:hover:not(:disabled),
 .edit-button:hover:not(:disabled),
 .cancel-button:hover:not(:disabled),
 .clear-filters-button:hover:not(:disabled) {
   background: var(--color-disabled);
+}
+
+.profile-delete-button:hover:not(:disabled) {
+  color: var(--color-surface);
+  background: var(--color-error);
+}
+
+.profile-delete-confirm-button:hover:not(:disabled) {
+  background: #8f1b13;
+  border-color: #8f1b13;
 }
 
 .delete-button {
@@ -288,6 +392,10 @@
 
 .submit-button:disabled,
 .logout-button:disabled,
+.profile-button:disabled,
+.profile-close-button:disabled,
+.profile-delete-button:disabled,
+.profile-delete-confirm-button:disabled,
 .session-button:disabled,
 .auth-switch-button:disabled,
 .edit-button:disabled,
@@ -314,6 +422,10 @@
 .notes-filter-favorite input:focus-visible,
 .submit-button:focus-visible,
 .logout-button:focus-visible,
+.profile-button:focus-visible,
+.profile-close-button:focus-visible,
+.profile-delete-button:focus-visible,
+.profile-delete-confirm-button:focus-visible,
 .session-button:focus-visible,
 .auth-switch-button:focus-visible,
 .edit-button:focus-visible,
@@ -345,7 +457,8 @@
 .auth-message,
 .notes-message,
 .deletion-message,
-.edit-message {
+.edit-message,
+.profile-message {
   line-height: 1.5;
 }
 
@@ -364,13 +477,15 @@
 
 .auth-message,
 .deletion-message,
-.edit-message {
+.edit-message,
+.profile-message {
   margin: 0 0 1rem;
 }
 
 .form-message--success,
 .deletion-message--success,
 .edit-message--success,
+.profile-message--success,
 .auth-message--notice {
   padding: 0.75rem 0.875rem;
   color: var(--color-text-strong);
@@ -383,7 +498,8 @@
 .auth-message--error,
 .notes-message--error,
 .deletion-message--error,
-.edit-message--error {
+.edit-message--error,
+.profile-message--error {
   padding: 0.75rem 0.875rem;
   color: var(--color-error);
   background: var(--color-error-soft);
@@ -556,8 +672,23 @@
     align-items: flex-start;
   }
 
+  .user-actions,
+  .profile-heading {
+    width: 100%;
+  }
+
+  .profile-heading {
+    flex-direction: column;
+  }
+
+  .user-actions > button,
+  .profile-close-button {
+    flex: 1 1 8rem;
+  }
+
   .create-note-section,
   .notes-section,
+  .profile-section,
   .login-section,
   .register-section,
   .session-section,

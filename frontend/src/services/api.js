@@ -384,10 +384,86 @@ async function deleteNote(noteId, { signal } = {}) {
   return data.data.id_nota;
 }
 
+async function updateCurrentUser(profile, { signal } = {}) {
+  if (
+    !profile
+    || typeof profile !== 'object'
+    || Array.isArray(profile)
+    || typeof profile.nombre !== 'string'
+    || typeof profile.correo !== 'string'
+  ) {
+    throw new Error('Los datos del perfil no son válidos.');
+  }
+
+  const name = profile.nombre.trim();
+  const email = profile.correo.trim().toLowerCase();
+
+  if (
+    !name
+    || name.length > 100
+    || !email
+    || email.length > 254
+    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new Error('Los datos del perfil no son válidos.');
+  }
+
+  const data = await requestJson('/api/users/me', {
+    body: {
+      nombre: name,
+      correo: email,
+    },
+    method: 'PUT',
+    signal,
+  });
+
+  if (
+    !data
+    || data.success !== true
+    || !data.data
+    || typeof data.data !== 'object'
+    || Array.isArray(data.data)
+    || !isValidPublicUser(data.data.user)
+  ) {
+    throw new Error('La respuesta de actualización del perfil no es válida.');
+  }
+
+  return data.data.user;
+}
+
+async function deleteCurrentUser(credentials, { signal } = {}) {
+  if (
+    !credentials
+    || typeof credentials !== 'object'
+    || Array.isArray(credentials)
+    || typeof credentials.password !== 'string'
+    || credentials.password.length === 0
+  ) {
+    throw new Error('La contraseña actual no es válida.');
+  }
+
+  const data = await requestJson('/api/users/me', {
+    body: { password: credentials.password },
+    method: 'DELETE',
+    signal,
+  });
+
+  if (
+    !data
+    || data.success !== true
+    || data.message !== 'Cuenta eliminada correctamente.'
+  ) {
+    throw new Error('La respuesta de eliminación de la cuenta no es válida.');
+  }
+
+  return true;
+}
+
 export {
   clearAuthToken,
   clearUnauthorizedHandler,
   createNote,
+  deleteCurrentUser,
   deleteNote,
   getCategories,
   getCurrentUser,
@@ -399,6 +475,7 @@ export {
   registerUser,
   setAuthToken,
   setUnauthorizedHandler,
+  updateCurrentUser,
   updateNote,
 };
 

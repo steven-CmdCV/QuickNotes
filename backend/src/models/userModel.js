@@ -29,6 +29,31 @@ function getPublicUserById(userId) {
   return db.prepare(query).get(userId) || null;
 }
 
+function getUserByIdWithPassword(userId) {
+  const query = `
+    SELECT
+      id_usuario,
+      nombre,
+      correo,
+      password_hash
+    FROM usuarios
+    WHERE id_usuario = ?
+  `;
+
+  return db.prepare(query).get(userId) || null;
+}
+
+function getUserByEmailExcludingId(email, userId) {
+  const query = `
+    SELECT id_usuario
+    FROM usuarios
+    WHERE correo = ? COLLATE NOCASE
+      AND id_usuario != ?
+  `;
+
+  return db.prepare(query).get(email, userId) || null;
+}
+
 function createUser({ name, email, passwordHash }) {
   const createUserTransaction = db.transaction(() => {
     const query = `
@@ -63,9 +88,58 @@ function createUser({ name, email, passwordHash }) {
   }
 }
 
+function updateUser({ userId, name, email }) {
+  const updateUserTransaction = db.transaction(() => {
+    const query = `
+      UPDATE usuarios
+      SET nombre = ?, correo = ?
+      WHERE id_usuario = ?
+    `;
+    const result = db.prepare(query).run(name, email, userId);
+
+    if (result.changes !== 1) {
+      throw new Error('La actualización no afectó exactamente un usuario.');
+    }
+
+    const user = getPublicUserById(userId);
+
+    if (!user) {
+      throw new Error('No se pudo recuperar el usuario actualizado.');
+    }
+
+    return user;
+  });
+
+  try {
+    return updateUserTransaction();
+  } catch (error) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      const duplicateError = new Error('El correo ya está registrado.');
+      duplicateError.code = EMAIL_ALREADY_EXISTS_CODE;
+      throw duplicateError;
+    }
+
+    throw error;
+  }
+}
+
+function deleteUserById(userId) {
+  const query = `
+    DELETE FROM usuarios
+    WHERE id_usuario = ?
+  `;
+  const result = db.prepare(query).run(userId);
+
+  return result.changes === 1;
+}
+
 module.exports = {
   EMAIL_ALREADY_EXISTS_CODE,
   createUser,
+  deleteUserById,
   getUserByEmail,
-  getPublicUserById
+  getPublicUserById,
+  getUserByEmailExcludingId,
+  getUserByIdWithPassword,
+  updateUser
 };

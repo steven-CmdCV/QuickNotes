@@ -15,6 +15,7 @@ const {
 const DEMO_EMAIL = 'demo@quicknotes.local';
 const DEMO_PASSWORD = 'QuickNotesDemo2026!';
 const REGISTERED_EMAIL = 'registro@quicknotes.local';
+const UPDATED_REGISTERED_EMAIL = 'perfil-actualizado@quicknotes.local';
 const TEST_JWT_SECRET = 'quick-notes-integration-test-secret';
 
 describe('Quick Notes API', { concurrency: false }, () => {
@@ -1024,6 +1025,381 @@ describe('Quick Notes API', { concurrency: false }, () => {
       success: false,
       message: 'Nota no encontrada.'
     });
+  });
+
+  test('PUT /api/users/me exige autenticacion', async () => {
+    const response = await request(app)
+      .put('/api/users/me')
+      .send({ nombre: 'Sin token', correo: 'sin-token@quicknotes.local' })
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('PUT /api/users/me valida el nombre', async () => {
+    const invalidBodies = [
+      { correo: UPDATED_REGISTERED_EMAIL },
+      { nombre: 10, correo: UPDATED_REGISTERED_EMAIL },
+      { nombre: '   ', correo: UPDATED_REGISTERED_EMAIL },
+      { nombre: 'a'.repeat(101), correo: UPDATED_REGISTERED_EMAIL }
+    ];
+
+    for (const body of invalidBodies) {
+      const response = await request(app)
+        .put('/api/users/me')
+        .set('Authorization', `Bearer ${registeredUserToken}`)
+        .send(body);
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+    }
+  });
+
+  test('PUT /api/users/me valida el correo', async () => {
+    const invalidBodies = [
+      { nombre: 'Perfil actualizado' },
+      { nombre: 'Perfil actualizado', correo: 10 },
+      { nombre: 'Perfil actualizado', correo: '   ' },
+      { nombre: 'Perfil actualizado', correo: 'correo-invalido' },
+      {
+        nombre: 'Perfil actualizado',
+        correo: `${'a'.repeat(250)}@test.com`
+      }
+    ];
+
+    for (const body of invalidBodies) {
+      const response = await request(app)
+        .put('/api/users/me')
+        .set('Authorization', `Bearer ${registeredUserToken}`)
+        .send(body);
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+    }
+  });
+
+  test('PUT /api/users/me actualiza solo el perfil autenticado', async () => {
+    const otherUserBefore = db.prepare(`
+      SELECT id_usuario, nombre, correo
+      FROM usuarios
+      WHERE id_usuario = ?
+    `).get(concurrentUserId);
+    const noteBefore = db.prepare(`
+      SELECT id_nota, id_usuario, titulo, contenido
+      FROM notas
+      WHERE id_usuario = ?
+    `).all(registeredUserId);
+
+    const response = await request(app)
+      .put('/api/users/me')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .send({
+        nombre: '  Perfil Actualizado  ',
+        correo: `  ${UPDATED_REGISTERED_EMAIL.toUpperCase()}  `,
+        id_usuario: concurrentUserId,
+        password: 'no debe utilizarse'
+      })
+      .expect(200);
+
+    assert.deepStrictEqual(response.body, {
+      success: true,
+      data: {
+        user: {
+          id_usuario: registeredUserId,
+          nombre: 'Perfil Actualizado',
+          correo: UPDATED_REGISTERED_EMAIL
+        }
+      }
+    });
+    assert.strictEqual(response.text.includes('password_hash'), false);
+    assert.strictEqual(response.text.includes('no debe utilizarse'), false);
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT id_usuario, nombre, correo
+        FROM usuarios
+        WHERE id_usuario = ?
+      `).get(concurrentUserId),
+      otherUserBefore
+    );
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT id_nota, id_usuario, titulo, contenido
+        FROM notas
+        WHERE id_usuario = ?
+      `).all(registeredUserId),
+      noteBefore
+    );
+  });
+
+  test('PUT /api/users/me permite conservar el correo actual', async () => {
+    const response = await request(app)
+      .put('/api/users/me')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .send({
+        nombre: 'Perfil Actualizado',
+        correo: UPDATED_REGISTERED_EMAIL
+      })
+      .expect(200);
+
+    assert.strictEqual(response.body.success, true);
+    assert.strictEqual(response.body.data.user.correo, UPDATED_REGISTERED_EMAIL);
+  });
+
+  test('PUT /api/users/me rechaza el correo de otro usuario', async () => {
+    const response = await request(app)
+      .put('/api/users/me')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .send({
+        nombre: 'Perfil Actualizado',
+        correo: 'aislamiento@quicknotes.local'
+      })
+      .expect(409);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Ya existe una cuenta con ese correo.'
+    });
+    assert.strictEqual(
+      db.prepare('SELECT correo FROM usuarios WHERE id_usuario = ?')
+        .get(registeredUserId).correo,
+      UPDATED_REGISTERED_EMAIL
+    );
+  });
+
+  test('el token actual conserva el perfil y las notas actualizadas', async () => {
+    const profileResponse = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .expect(200);
+    const notesResponse = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${registeredUserToken}`)
+      .expect(200);
+
+    assert.deepStrictEqual(profileResponse.body.data.user, {
+      id_usuario: registeredUserId,
+      nombre: 'Perfil Actualizado',
+      correo: UPDATED_REGISTERED_EMAIL
+    });
+    assert.strictEqual(notesResponse.body.data.length, 1);
+    assert.strictEqual(notesResponse.body.data[0].id_usuario, registeredUserId);
+  });
+
+  test('el perfil actualizado inicia sesion solo con el correo nuevo', async () => {
+    const newEmailResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: UPDATED_REGISTERED_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+    const oldEmailResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: REGISTERED_EMAIL, password: DEMO_PASSWORD })
+      .expect(401);
+
+    assert.strictEqual(
+      newEmailResponse.body.data.user.id_usuario,
+      registeredUserId
+    );
+    assert.deepStrictEqual(oldEmailResponse.body, {
+      success: false,
+      message: 'Credenciales inválidas.'
+    });
+  });
+
+  test('DELETE /api/users/me exige autenticacion', async () => {
+    const response = await request(app)
+      .delete('/api/users/me')
+      .send({ password: DEMO_PASSWORD })
+      .expect(401);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'Autenticación requerida.'
+    });
+  });
+
+  test('DELETE /api/users/me valida la contrasena', async () => {
+    const missingResponse = await request(app)
+      .delete('/api/users/me')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .send({})
+      .expect(400);
+    const typeResponse = await request(app)
+      .delete('/api/users/me')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .send({ password: 10 })
+      .expect(400);
+
+    assert.deepStrictEqual(missingResponse.body, {
+      success: false,
+      message: 'La contraseña actual es obligatoria.'
+    });
+    assert.deepStrictEqual(typeResponse.body, {
+      success: false,
+      message: 'La contraseña actual debe ser una cadena de texto.'
+    });
+  });
+
+  test('DELETE /api/users/me rechaza la contrasena incorrecta sin eliminar datos', async () => {
+    const userBefore = db.prepare(`
+      SELECT id_usuario, nombre, correo
+      FROM usuarios
+      WHERE id_usuario = ?
+    `).get(concurrentUserId);
+    const notesBefore = db.prepare(`
+      SELECT id_nota, titulo
+      FROM notas
+      WHERE id_usuario = ?
+      ORDER BY id_nota
+    `).all(concurrentUserId);
+
+    const response = await request(app)
+      .delete('/api/users/me')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .send({ password: 'ContrasenaIncorrecta' })
+      .expect(403);
+
+    assert.deepStrictEqual(response.body, {
+      success: false,
+      message: 'La contraseña actual es incorrecta.'
+    });
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT id_usuario, nombre, correo
+        FROM usuarios
+        WHERE id_usuario = ?
+      `).get(concurrentUserId),
+      userBefore
+    );
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT id_nota, titulo
+        FROM notas
+        WHERE id_usuario = ?
+        ORDER BY id_nota
+      `).all(concurrentUserId),
+      notesBefore
+    );
+  });
+
+  test('DELETE /api/users/me elimina la cuenta y sus notas por cascada', async () => {
+    assert.strictEqual(db.pragma('foreign_keys', { simple: true }), 1);
+
+    const categoryCountBefore = db.prepare(
+      'SELECT COUNT(*) FROM categorias'
+    ).pluck().get();
+    const otherUserBefore = db.prepare(`
+      SELECT id_usuario, nombre, correo
+      FROM usuarios
+      WHERE id_usuario = ?
+    `).get(registeredUserId);
+    const otherNotesBefore = db.prepare(`
+      SELECT id_nota, titulo
+      FROM notas
+      WHERE id_usuario = ?
+      ORDER BY id_nota
+    `).all(registeredUserId);
+
+    assert.ok(db.prepare(
+      'SELECT COUNT(*) FROM notas WHERE id_usuario = ?'
+    ).pluck().get(concurrentUserId) > 0);
+
+    const response = await request(app)
+      .delete('/api/users/me')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .send({
+        password: DEMO_PASSWORD,
+        id_usuario: 1,
+        correo: DEMO_EMAIL
+      })
+      .expect(200);
+
+    assert.deepStrictEqual(response.body, {
+      success: true,
+      message: 'Cuenta eliminada correctamente.'
+    });
+    assert.strictEqual(response.text.includes('password_hash'), false);
+    assert.strictEqual(response.text.includes(DEMO_PASSWORD), false);
+    assert.strictEqual(
+      db.prepare('SELECT COUNT(*) FROM usuarios WHERE id_usuario = ?')
+        .pluck().get(concurrentUserId),
+      0
+    );
+    assert.strictEqual(
+      db.prepare('SELECT COUNT(*) FROM notas WHERE id_usuario = ?')
+        .pluck().get(concurrentUserId),
+      0
+    );
+    assert.strictEqual(
+      db.prepare('SELECT COUNT(*) FROM categorias').pluck().get(),
+      categoryCountBefore
+    );
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT id_usuario, nombre, correo
+        FROM usuarios
+        WHERE id_usuario = ?
+      `).get(registeredUserId),
+      otherUserBefore
+    );
+    assert.deepStrictEqual(
+      db.prepare(`
+        SELECT id_nota, titulo
+        FROM notas
+        WHERE id_usuario = ?
+        ORDER BY id_nota
+      `).all(registeredUserId),
+      otherNotesBefore
+    );
+    assert.strictEqual(
+      db.prepare(`
+        SELECT COUNT(*)
+        FROM notas
+        LEFT JOIN usuarios USING (id_usuario)
+        WHERE usuarios.id_usuario IS NULL
+      `).pluck().get(),
+      0
+    );
+    assert.deepStrictEqual(db.pragma('foreign_key_check'), []);
+  });
+
+  test('el token de la cuenta eliminada deja de autorizar solicitudes', async () => {
+    const profileResponse = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .expect(401);
+    const notesResponse = await request(app)
+      .get('/api/notes')
+      .set('Authorization', `Bearer ${concurrentUserToken}`)
+      .expect(401);
+
+    assert.deepStrictEqual(profileResponse.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+    assert.deepStrictEqual(notesResponse.body, {
+      success: false,
+      message: 'Token inválido o expirado.'
+    });
+  });
+
+  test('la cuenta eliminada no inicia sesion y el usuario demo permanece', async () => {
+    await request(app)
+      .post('/api/auth/login')
+      .send({
+        correo: 'concurrente@quicknotes.local',
+        password: DEMO_PASSWORD
+      })
+      .expect(401);
+
+    const demoResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ correo: DEMO_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+
+    assert.strictEqual(demoResponse.body.data.user.id_usuario, 1);
   });
 
   test('GET /api/unknown devuelve la ruta no encontrada', async () => {

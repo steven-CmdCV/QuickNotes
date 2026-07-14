@@ -1,57 +1,107 @@
-# Base de datos
+# Base de datos de QuickNotes
 
-Esta carpeta contiene los archivos necesarios para crear la base de datos local de Quick Notes.
+Esta carpeta contiene la definición, los datos académicos iniciales y el script
+de inicialización de la base SQLite de QuickNotes.
 
 ## Archivos
 
-- `schema.sql`: crea las tablas `usuarios`, `categorias` y `notas`.
-- `seed.sql`: agrega categorias iniciales, un usuario demo y notas de ejemplo.
-- `init_db.js`: ejecuta el esquema y los datos iniciales sobre SQLite.
-- `data/`: carpeta donde se genera el archivo local `quick_notes.db`.
+- `schema.sql`: crea las tablas, restricciones y relaciones.
+- `seed.sql`: inserta categorías, el usuario demo y dos notas de ejemplo.
+- `init_db.js`: aplica schema y seed sobre la base principal.
+- `data/.gitkeep`: conserva en Git la carpeta destinada a la base local.
 
-## Creacion de la base de datos
-
-La base de datos se crea en:
+La base principal se crea en:
 
 ```text
 backend/database/data/quick_notes.db
 ```
 
-El archivo `.db` no se sube al repositorio porque contiene datos locales.
+Los archivos de datos SQLite son locales y están ignorados por Git.
 
-## Tablas
+## Tablas y relaciones
 
-- `usuarios`: guarda usuarios basicos de la aplicacion.
-- `categorias`: guarda categorias para clasificar notas.
-- `notas`: guarda notas asociadas a un usuario y, opcionalmente, a una categoria.
+### `usuarios`
 
-Las claves foraneas de SQLite se activan con:
+Almacena el nombre, correo normalizado, hash de contraseña y fecha de registro.
+El correo tiene una restricción `UNIQUE`.
+
+### `categorias`
+
+Contiene las categorías compartidas disponibles para clasificar notas. Las
+categorías son de solo lectura desde la API actual.
+
+### `notas`
+
+Cada nota pertenece obligatoriamente a un usuario y puede pertenecer a una
+categoría. Incluye título, contenido, estado de favorita y fechas de creación y
+modificación.
+
+Las relaciones principales son:
+
+- `notas.id_usuario` → `usuarios.id_usuario` con `ON DELETE CASCADE`.
+- `notas.id_categoria` → `categorias.id_categoria` con `ON DELETE SET NULL`.
+
+SQLite requiere claves foráneas habilitadas en cada conexión. Tanto la
+aplicación como el inicializador y las pruebas ejecutan:
 
 ```sql
 PRAGMA foreign_keys = ON;
 ```
 
-## Credenciales academicas
+Al eliminar una cuenta, SQLite elimina sus notas en cascada. Eliminar una
+categoría dejaría las notas relacionadas sin categoría.
 
-El usuario demo se utiliza exclusivamente para presentar y probar el proyecto:
+## Seed idempotente
+
+El seed puede ejecutarse varias veces sin duplicar los datos iniciales:
+
+- Las categorías y el usuario demo utilizan inserciones tolerantes a registros
+  existentes.
+- Cada nota demo se inserta mediante `WHERE NOT EXISTS` comparando usuario,
+  categoría, título, contenido y estado de favorita.
+- El archivo ejecuta sus operaciones dentro de una transacción.
+
+## Inicialización
+
+Desde la raíz del repositorio:
+
+```bash
+npm run init-db --prefix backend
+```
+
+Desde `backend/`:
+
+```bash
+npm run init-db
+```
+
+`init_db.js` siempre inicializa
+`backend/database/data/quick_notes.db`. No utiliza `DB_PATH`, por lo que no debe
+ejecutarse esperando que esa variable redirija la inicialización.
+
+No es necesario ni recomendable borrar la base principal antes de ejecutar el
+script: schema y seed están preparados para verificar o completar los datos
+esperados.
+
+## Credenciales académicas
+
+El seed incluye intencionalmente un usuario de demostración:
 
 ```text
 Correo: demo@quicknotes.local
 Contraseña: QuickNotesDemo2026!
 ```
 
-La base de datos almacena solamente el hash bcrypt de esta contraseña.
+La base almacena únicamente el hash bcrypt. Estas credenciales son exclusivas
+del entorno académico y no deben reutilizarse.
 
-## Ejecutar inicializacion
+## Bases temporales y `DB_PATH`
 
-Desde la raiz del proyecto:
+La conexión de la aplicación acepta `DB_PATH` para abrir una base diferente a
+la principal. La suite de integración crea una base temporal fuera del
+repositorio, aplica `schema.sql` y `seed.sql`, establece `DB_PATH` antes de
+importar la aplicación y elimina la carpeta temporal al terminar.
 
-```bash
-npm run init-db --prefix backend
-```
-
-Tambien se puede ejecutar desde la carpeta `backend`:
-
-```bash
-npm run init-db
-```
+Las pruebas destructivas o validaciones manuales deben utilizar una base
+temporal. No deben ejecutarse contra
+`backend/database/data/quick_notes.db`.
